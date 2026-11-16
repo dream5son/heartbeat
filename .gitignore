@@ -219,3 +219,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Application logs
+/logs/
+.trae
+.screenshots
+.joycode

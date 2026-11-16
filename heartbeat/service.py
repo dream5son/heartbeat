@@ -1,10 +1,15 @@
+import calendar
 import datetime as dt
+import time
 import urllib.error
 import urllib.request
 from typing import Any
 
+from .alarm import maybe_send_alarm, send_email_alarm
+from .logging_config import logger
 from .model import (
     DEFAULT_SUCCESS_RULE,
+    AlarmRecord,
     DailyCheck,
     FailureRecord,
     Service,
@@ -13,8 +18,14 @@ from .model import (
     YearlyCheck,
     day_column,
     minute_column,
+    normalize_alarm_channels,
     normalize_success_rule,
+    parse_alarm_recipients,
 )
+
+
+class ServiceHasChildrenError(Exception):
+    """Raised when deleting a service that still has child services."""
 
 
 def endpoint_check_passed(
@@ -81,11 +92,13 @@ def perform_service_check(
     service: Service,
     check_time: dt.datetime,
     checker=check_url,
+    notifier=send_email_alarm,
 ) -> bool:
     minute_col = minute_column(check_time)
     day_col = day_column(check_time.date())
 
     endpoint_results: list[tuple[bool, int, str, str, str]] = []
+    failed_endpoints: list[tuple[ServiceEndpoint, int, str]] = []
     for endpoint in service.endpoints:
         result = checker(endpoint.heartbeat_url)
         if len(result) == 3:
@@ -100,6 +113,8 @@ def perform_service_check(
                     normalize_success_rule(endpoint.success_rule),
                 )
             )
+            if not endpoint_ok:
+                failed_endpoints.append((endpoint, int(status_code), str(detail)))
             continue
 
         request_ok, status_code, detail, response_body = result
@@ -119,6 +134,8 @@ def perform_service_check(
                 success_rule,
             )
         )
+        if not endpoint_ok:
+            failed_endpoints.append((endpoint, int(status_code), str(detail)))
 
     if endpoint_results:
         service_ok = all(item[0] for item in endpoint_results)
@@ -140,6 +157,14 @@ def perform_service_check(
         for ok, status_code, detail, heartbeat_url, success_rule in endpoint_results:
             if ok:
                 continue
+            logger.warning(
+                "health check failed: service={} url={} rule={} status={} detail={}",
+                service.name,
+                heartbeat_url or "-",
+                success_rule,
+                status_code,
+                detail,
+            )
             session.add(
                 FailureRecord(
                     service_id=service.id,
@@ -149,19 +174,49 @@ def perform_service_check(
                 )
             )
 
+        for endpoint, status_code, detail in failed_endpoints:
+            maybe_send_alarm(
+                session,
+                service,
+                endpoint,
+                check_time,
+                status_code,
+                detail,
+                endpoint_results,
+                notifier=notifier,
+            )
+
     return service_ok
 
 
 def run_health_checks(check_time: dt.datetime | None = None) -> None:
     check_time = check_time or dt.datetime.now().replace(second=0, microsecond=0)
+    started = time.monotonic()
+    logger.info("health check run started: check_time={}", check_time.isoformat(timespec="minutes"))
     session = SessionLocal()
     try:
         services = session.query(Service).filter(Service.enabled.is_(True)).all()
+        healthy = 0
+        unhealthy = 0
         for service in services:
-            perform_service_check(session, service, check_time)
+            if perform_service_check(session, service, check_time):
+                healthy += 1
+            else:
+                unhealthy += 1
         session.commit()
+        logger.info(
+            "health check run finished: total={} healthy={} unhealthy={} elapsed_ms={}",
+            len(services),
+            healthy,
+            unhealthy,
+            int((time.monotonic() - started) * 1000),
+        )
     except Exception:  # noqa: BLE001
         session.rollback()
+        logger.exception(
+            "health check run failed: check_time={}",
+            check_time.isoformat(timespec="minutes"),
+        )
         raise
     finally:
         session.close()
@@ -340,9 +395,369 @@ def service_to_dict(service: Service) -> dict[str, Any]:
                 "id": endpoint.id,
                 "heartbeat_url": endpoint.heartbeat_url,
                 "success_rule": normalize_success_rule(endpoint.success_rule),
+                "alarm_enabled": bool(endpoint.alarm_enabled),
+                "alarm_channels": normalize_alarm_channels(endpoint.alarm_channels),
+                "alarm_recipients": ",".join(parse_alarm_recipients(endpoint.alarm_recipients)),
+                "alarm_window_minutes": endpoint.alarm_window_minutes,
+                "alarm_max_per_window": endpoint.alarm_max_per_window,
             }
             for endpoint in service.endpoints
         ],
         "heartbeat_urls": [e.heartbeat_url for e in service.endpoints],
         "child_service_ids": [child.id for child in service.children],
+    }
+
+
+def list_services(session: Any) -> list[dict[str, Any]]:
+    return [service_to_dict(service) for service in session.query(Service).all()]
+
+
+def create_service(
+    session: Any,
+    *,
+    name: str,
+    parent_id: int | None,
+    enabled: bool,
+    heartbeat_configs: list[dict[str, Any]],
+) -> Service:
+    service = Service(name=name, parent_id=parent_id, enabled=enabled)
+    for config in heartbeat_configs:
+        service.endpoints.append(ServiceEndpoint(**config))
+    session.add(service)
+    session.commit()
+    session.refresh(service)
+    logger.info(
+        "service created: id={} name={} parent_id={} endpoints={}",
+        service.id,
+        service.name,
+        service.parent_id,
+        len(service.endpoints),
+    )
+    return service
+
+
+def update_service(
+    session: Any,
+    service_id: int,
+    payload: dict[str, Any],
+    heartbeat_configs: list[dict[str, Any]] | None = None,
+) -> Service | None:
+    service = session.get(Service, service_id)
+    if service is None:
+        return None
+
+    if "name" in payload:
+        service.name = payload["name"].strip()
+    if "parent_id" in payload:
+        service.parent_id = payload["parent_id"]
+    if "enabled" in payload:
+        service.enabled = bool(payload["enabled"])
+    if heartbeat_configs is not None:
+        service.endpoints.clear()
+        for config in heartbeat_configs:
+            service.endpoints.append(ServiceEndpoint(**config))
+
+    session.commit()
+    session.refresh(service)
+    logger.info("service updated: id={} fields={}", service.id, sorted(payload.keys()))
+    return service
+
+
+def delete_service(session: Any, service_id: int) -> bool:
+    service = session.get(Service, service_id)
+    if service is None:
+        return False
+    if service.children:
+        raise ServiceHasChildrenError(
+            f"service {service_id} has child services; delete child services first"
+        )
+
+    session.query(DailyCheck).filter(DailyCheck.service_id == service_id).delete(
+        synchronize_session=False
+    )
+    session.query(YearlyCheck).filter(YearlyCheck.service_id == service_id).delete(
+        synchronize_session=False
+    )
+    session.query(FailureRecord).filter(FailureRecord.service_id == service_id).delete(
+        synchronize_session=False
+    )
+    session.query(AlarmRecord).filter(AlarmRecord.service_id == service_id).delete(
+        synchronize_session=False
+    )
+
+    name = service.name
+    session.delete(service)
+    session.commit()
+    logger.info("service deleted: id={} name={}", service_id, name)
+    return True
+
+
+def service_current_status(session: Any, service_id: int) -> dict[str, Any] | None:
+    service = session.get(Service, service_id)
+    if service is None:
+        return None
+
+    latest_status, latest_time = _latest_status_snapshot(session, service_id)
+    return {
+        "service": service_to_dict(service),
+        "status": _status_text(latest_status),
+        "last_check_time": latest_time,
+    }
+
+
+def status_tree(session: Any) -> list[dict[str, Any]]:
+    roots = (
+        session.query(Service)
+        .filter(Service.parent_id.is_(None))
+        .order_by(Service.name.asc())
+        .all()
+    )
+    output: list[dict[str, Any]] = []
+    for root in roots:
+        child_nodes = [_service_status_node(session, child) for child in root.children]
+        root_node = _service_status_node(session, root)
+
+        combined_statuses = [root_node["status"], *[node["status"] for node in child_nodes]]
+        root_node["status"] = _combine_service_state(combined_statuses)
+        root_node["children"] = child_nodes
+        scoped_ids = [root.id, *[child.id for child in root.children]]
+        root_node["failure_hint"] = _latest_failure_hint(session, scoped_ids)
+        output.append(root_node)
+    return output
+
+
+def _daily_status_series(
+    session: Any,
+    service_id: int,
+    start_date: dt.date,
+    days: int,
+) -> list[dict[str, Any]]:
+    end_date = start_date + dt.timedelta(days=days - 1)
+    rows = (
+        session.query(DailyCheck)
+        .filter(
+            DailyCheck.service_id == service_id,
+            DailyCheck.date >= start_date,
+            DailyCheck.date <= end_date,
+        )
+        .order_by(DailyCheck.date.asc())
+        .all()
+    )
+    row_map = {row.date: row for row in rows}
+
+    series: list[dict[str, Any]] = []
+    for offset in range(days):
+        current_date = start_date + dt.timedelta(days=offset)
+        series.append(
+            {
+                "date": current_date.isoformat(),
+                "status": _status_text(_daily_row_health(row_map.get(current_date))),
+            }
+        )
+    return series
+
+
+def service_recent_days(session: Any, service_id: int, days: int) -> dict[str, Any] | None:
+    service = session.get(Service, service_id)
+    if service is None:
+        return None
+
+    start_date = dt.date.today() - dt.timedelta(days=days - 1)
+    return {
+        "service": service_to_dict(service),
+        "days": _daily_status_series(session, service_id, start_date, days),
+    }
+
+
+def service_daily_detail(
+    session: Any,
+    service_id: int,
+    start_date: dt.date,
+    end_date: dt.date,
+) -> dict[str, Any] | None:
+    service = session.get(Service, service_id)
+    if service is None:
+        return None
+
+    days = (end_date - start_date).days + 1
+    rows = (
+        session.query(DailyCheck)
+        .filter(
+            DailyCheck.service_id == service_id,
+            DailyCheck.date >= start_date,
+            DailyCheck.date <= end_date,
+        )
+        .order_by(DailyCheck.date.asc())
+        .all()
+    )
+    row_map = {row.date: row for row in rows}
+
+    result: list[dict[str, Any]] = []
+    for offset in range(days):
+        current_date = start_date + dt.timedelta(days=offset)
+        detail = _daily_row_detail(row_map.get(current_date))
+        result.append({"date": current_date.isoformat(), **detail})
+
+    return {"service": service_to_dict(service), "days": result}
+
+
+def service_recent_hours(session: Any, service_id: int, hours: int) -> dict[str, Any] | None:
+    service = session.get(Service, service_id)
+    if service is None:
+        return None
+
+    return {
+        "service": service_to_dict(service),
+        "hours": hours,
+        "status": _service_status_history(session, service_id, hours=hours),
+    }
+
+
+def children_recent_days(session: Any, service_id: int, days: int) -> dict[str, Any] | None:
+    parent = session.get(Service, service_id)
+    if parent is None:
+        return None
+
+    start_date = dt.date.today() - dt.timedelta(days=days - 1)
+    children = [
+        {
+            "service": service_to_dict(child),
+            "days": _daily_status_series(session, child.id, start_date, days),
+        }
+        for child in parent.children
+    ]
+    return {"parent_service": service_to_dict(parent), "children": children}
+
+
+def failure_records_for_day(
+    session: Any,
+    service_id: int,
+    check_date: dt.date,
+) -> list[dict[str, Any]]:
+    start_dt = dt.datetime.combine(check_date, dt.time.min)
+    end_dt = dt.datetime.combine(check_date + dt.timedelta(days=1), dt.time.min)
+    records = (
+        session.query(FailureRecord)
+        .filter(
+            FailureRecord.service_id == service_id,
+            FailureRecord.check_time >= start_dt,
+            FailureRecord.check_time < end_dt,
+        )
+        .order_by(FailureRecord.check_time.asc())
+        .all()
+    )
+    return [
+        {
+            "id": row.id,
+            "check_time": row.check_time.isoformat(),
+            "status": row.status,
+            "log": row.log,
+        }
+        for row in records
+    ]
+
+
+def service_failure_records(
+    session: Any,
+    service_id: int,
+    check_date: dt.date,
+) -> dict[str, Any] | None:
+    service = session.get(Service, service_id)
+    if service is None:
+        return None
+
+    return {
+        "service": service,
+        "date": check_date.isoformat(),
+        "failures": failure_records_for_day(session, service_id, check_date),
+    }
+
+
+def service_status_calendar_data(
+    session: Any,
+    service_id: int,
+    year: int,
+    month: int,
+) -> dict[str, Any] | None:
+    service = session.get(Service, service_id)
+    if service is None:
+        return None
+
+    yearly = (
+        session.query(YearlyCheck)
+        .filter(YearlyCheck.service_id == service_id, YearlyCheck.year == year)
+        .one_or_none()
+    )
+    unhealthy_days: set[str] = set()
+    if yearly is not None:
+        month_days = calendar.monthrange(year, month)[1]
+        for day in range(1, month_days + 1):
+            value = getattr(yearly, f"day_{month:02d}{day:02d}")
+            if value == 0:
+                unhealthy_days.add(dt.date(year, month, day).isoformat())
+
+    prev_year, prev_month = (year - 1, 12) if month == 1 else (year, month - 1)
+    next_year, next_month = (year + 1, 1) if month == 12 else (year, month + 1)
+    return {
+        "service": service,
+        "year": year,
+        "month": month,
+        "weeks": calendar.monthcalendar(year, month),
+        "unhealthy_days": unhealthy_days,
+        "prev_year": prev_year,
+        "prev_month": prev_month,
+        "next_year": next_year,
+        "next_month": next_month,
+        "today": dt.date.today().isoformat(),
+    }
+
+
+def list_alarm_records(
+    session: Any,
+    *,
+    start_dt: dt.datetime,
+    end_dt: dt.datetime,
+    service_id: int | None = None,
+    send_status: str = "",
+    limit: int = 100,
+    offset: int = 0,
+) -> dict[str, Any]:
+    query = session.query(AlarmRecord).filter(
+        AlarmRecord.alarm_time >= start_dt,
+        AlarmRecord.alarm_time < end_dt,
+    )
+    if service_id is not None:
+        query = query.filter(AlarmRecord.service_id == service_id)
+    if send_status:
+        query = query.filter(AlarmRecord.send_status == send_status)
+
+    total = query.count()
+    rows = (
+        query.order_by(AlarmRecord.alarm_time.desc(), AlarmRecord.id.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    return {
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "records": [
+            {
+                "id": row.id,
+                "service_id": row.service_id,
+                "service_name": row.service_name,
+                "endpoint_id": row.endpoint_id,
+                "heartbeat_url": row.heartbeat_url,
+                "success_rule": row.success_rule,
+                "alarm_time": row.alarm_time.isoformat(),
+                "channel": row.channel,
+                "recipients": row.recipients,
+                "send_status": row.send_status,
+                "error": row.error,
+                "check_status": row.check_status,
+                "detail": row.detail,
+            }
+            for row in rows
+        ],
     }

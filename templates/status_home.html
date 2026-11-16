@@ -4,96 +4,174 @@
 
 {% block page_styles %}
     <style>
-      :root {
-        --bg: #f6f7fb;
-        --card: #ffffff;
-        --muted: #64748b;
-        --line: rgba(148, 163, 184, 0.22);
-        --text: #0f172a;
-        --green: #22c55e;
-        --green-soft: #dcfce7;
-        --yellow: #fbbf24;
-        --orange: #f97316;
-        --red: #ef4444;
-        --red-soft: #fee2e2;
-        --slate: #dbe2ea;
-        --shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
-      }
-
-      .container {
-        max-width: 960px;
-        margin: 0 auto;
-        padding: 28px 16px 64px;
-      }
-
-      .summary-card {
-        border-radius: 16px;
-        border: 1px solid rgba(34, 197, 94, 0.2);
-        background: linear-gradient(180deg, #ecfdf5 0%, #f0fdf4 100%);
-        box-shadow: var(--shadow);
-        padding: 16px 18px;
+      .page-head {
         margin-bottom: 18px;
       }
 
-      .summary-row {
-        display: flex;
+      .page-meta {
+        display: inline-flex;
         align-items: center;
-        gap: 10px;
+        gap: 8px;
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.82rem;
       }
 
-      .summary-dot {
-        width: 16px;
-        height: 16px;
+      .live-dot {
+        width: 7px;
+        height: 7px;
         border-radius: 50%;
-        background: var(--green);
+        background: var(--ok);
+        box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.14);
+      }
+
+      .summary-card {
+        position: relative;
+        padding: 20px 22px;
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--line);
+        background: var(--surface);
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 20px;
+      }
+
+      .summary-card.is-healthy {
+        border-color: rgba(22, 163, 74, 0.28);
+        background: linear-gradient(180deg, #f2fbf6 0%, #fbfefc 100%);
+      }
+
+      .summary-card.is-warning {
+        border-color: rgba(217, 119, 6, 0.3);
+        background: linear-gradient(180deg, #fefaf0 0%, #fffdf8 100%);
+      }
+
+      .summary-card.is-critical {
+        border-color: rgba(220, 38, 38, 0.28);
+        background: linear-gradient(180deg, #fef4f4 0%, #fffbfb 100%);
+      }
+
+      .summary-card.is-neutral {
+        background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+      }
+
+      .summary-head {
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+
+      .summary-icon {
+        flex: none;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        color: white;
-        font-size: 11px;
+        color: #fff;
+        font-size: 1rem;
         font-weight: 700;
-        box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.18);
+        background: var(--ok);
+        box-shadow: 0 0 0 5px rgba(22, 163, 74, 0.12);
+      }
+
+      .is-warning .summary-icon {
+        background: var(--warn);
+        box-shadow: 0 0 0 5px rgba(217, 119, 6, 0.12);
+      }
+
+      .is-critical .summary-icon {
+        background: var(--danger);
+        box-shadow: 0 0 0 5px rgba(220, 38, 38, 0.12);
+      }
+
+      .is-neutral .summary-icon {
+        background: var(--neutral);
+        box-shadow: 0 0 0 5px rgba(100, 116, 139, 0.12);
+      }
+
+      .summary-copy {
+        flex: 1;
+        min-width: 200px;
       }
 
       .summary-title {
-        font-size: 1.02rem;
-        font-weight: 700;
-        margin: 0;
+        margin: 2px 0 0;
+        font-size: 1.16rem;
+        line-height: 1.35;
+        letter-spacing: -0.01em;
       }
 
       .summary-subtitle {
-        margin: 8px 0 0 26px;
+        margin: 4px 0 0;
         color: var(--muted);
-        font-size: 0.92rem;
+        font-size: 0.88rem;
       }
 
-      .summary-recent {
-        margin-top: 12px;
-        padding-top: 10px;
-        border-top: 1px dashed rgba(148, 163, 184, 0.35);
+      .summary-chip {
+        flex: none;
+        align-self: center;
+        padding: 4px 12px;
+        border-radius: 999px;
+        border: 1px solid var(--line-strong);
+        background: rgba(255, 255, 255, 0.85);
+        color: var(--text-soft);
+        font-size: 0.76rem;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
       }
 
-      .summary-recent-title {
-        margin: 0 0 6px;
-        color: var(--muted);
+      .summary-trend {
+        margin-top: 16px;
+        padding-top: 14px;
+        border-top: 1px dashed var(--line-strong);
+      }
+
+      .trend-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 8px;
+      }
+
+      .trend-title {
+        margin: 0;
         font-size: 0.78rem;
+        font-weight: 600;
+        color: var(--text-soft);
+      }
+
+      .trend-scale {
+        color: var(--muted-soft);
+        font-size: 0.74rem;
       }
 
       .status-panel {
-        background: rgba(255, 255, 255, 0.72);
-        border: 1px solid rgba(148, 163, 184, 0.22);
-        border-radius: 18px;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
         overflow: hidden;
-        box-shadow: var(--shadow);
+        box-shadow: var(--shadow-sm);
       }
 
       .panel-header {
         display: flex;
+        flex-wrap: wrap;
         justify-content: space-between;
         align-items: center;
-        padding: 14px 16px 12px;
+        gap: 12px;
+        padding: 16px 20px;
         border-bottom: 1px solid var(--line);
-        background: rgba(248, 250, 252, 0.8);
+        background: #fbfcfe;
+      }
+
+      .panel-heading {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        min-width: 0;
       }
 
       .panel-title {
@@ -102,56 +180,95 @@
         font-weight: 700;
       }
 
+      .panel-hint {
+        color: var(--muted-soft);
+        font-size: 0.76rem;
+      }
+
       .range-picker {
-        display: flex;
+        display: inline-flex;
         align-items: center;
-        gap: 8px;
-        color: var(--muted);
-        font-size: 0.83rem;
+        gap: 6px;
+        padding: 4px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: #fff;
       }
 
       .range-btn {
         width: 28px;
         height: 28px;
-        border-radius: 8px;
-        border: 1px solid transparent;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        border: none;
         background: transparent;
         color: var(--muted);
-        font-size: 1rem;
-        cursor: default;
+        cursor: pointer;
+        transition: background 0.16s ease, color 0.16s ease;
+      }
+
+      .range-btn:hover:not([disabled]) {
+        background: var(--neutral-soft);
+        color: var(--text);
       }
 
       .range-btn[disabled] {
-        opacity: 0.45;
+        opacity: 0.35;
+        cursor: not-allowed;
+      }
+
+      .range-label {
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center;
+        line-height: 1.25;
+        padding: 0 6px;
+      }
+
+      .range-text {
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: var(--text-soft);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+
+      .range-hint {
+        font-size: 0.68rem;
+        color: var(--muted-soft);
       }
 
       .status-stack {
         display: grid;
-        gap: 0;
+        grid-template-columns: minmax(0, 1fr);
       }
 
       .service-card {
-        padding: 14px 16px 12px;
+        min-width: 0;
+        padding: 18px 20px 16px;
         border-bottom: 1px solid var(--line);
-        background: rgba(255, 255, 255, 0.45);
+        transition: background 0.16s ease;
       }
 
       .service-card:last-child { border-bottom: none; }
 
-      .service-row {
+      .service-card:hover { background: #fcfdff; }
+
+      .service-top {
         display: flex;
-        flex-wrap: wrap;
-        justify-content: space-between;
         align-items: center;
-        gap: 12px;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 8px 12px;
       }
 
-      .service-meta {
+      .service-ident {
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: 8px;
         min-width: 0;
-        flex: 1;
       }
 
       .service-name {
@@ -160,78 +277,115 @@
         text-overflow: ellipsis;
         white-space: nowrap;
         font-weight: 700;
-        font-size: 0.95rem;
-      }
-
-      .service-name a {
-        color: inherit;
+        font-size: 0.98rem;
+        color: var(--text);
         text-decoration: none;
       }
 
-      .service-name a:hover { text-decoration: underline; }
+      .service-name:hover {
+        color: var(--link-strong);
+        text-decoration: underline;
+      }
 
-      .service-info {
-        width: 18px;
-        height: 18px;
-        border-radius: 6px;
-        border: 1px solid rgba(148, 163, 184, 0.6);
+      .icon-link {
+        flex: none;
+        width: 24px;
+        height: 24px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        color: var(--muted);
-        font-size: 0.7rem;
-        font-weight: 700;
-        background: rgba(255,255,255,0.8);
+        border-radius: 7px;
+        color: var(--muted-soft);
+        background: transparent;
+        border: 1px solid transparent;
+        text-decoration: none;
+        transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+      }
+
+      .icon-link:hover {
+        background: #eef2ff;
+        border-color: #dbe3ff;
+        color: var(--link);
       }
 
       .status-badge {
+        flex: none;
         display: inline-flex;
         align-items: center;
-        gap: 8px;
+        gap: 6px;
         border-radius: 999px;
-        padding: 4px 12px;
-        font-size: 0.75rem;
+        padding: 3px 10px;
+        font-size: 0.74rem;
         font-weight: 700;
-        color: white;
-        letter-spacing: 0.02em;
+        letter-spacing: 0.01em;
+        white-space: nowrap;
+        border: 1px solid transparent;
       }
-
-      .status-badge.healthy { background: var(--green); }
-      .status-badge.unhealthy { background: var(--red); }
-      .status-badge.partial { background: #fbbf24; color: #1f2937; }
-      .status-badge.partial::before { background: rgba(31, 41, 55, 0.8); }
-      .status-badge.unknown { background: #64748b; }
 
       .status-badge::before {
         content: '';
         width: 6px;
         height: 6px;
         border-radius: 50%;
-        background: rgba(255,255,255,0.9);
+        background: currentColor;
       }
 
-      .subrow {
+      .status-badge.healthy {
+        color: var(--ok-strong);
+        background: var(--ok-soft);
+        border-color: rgba(22, 163, 74, 0.2);
+      }
+
+      .status-badge.unhealthy {
+        color: var(--danger-strong);
+        background: var(--danger-soft);
+        border-color: rgba(220, 38, 38, 0.2);
+      }
+
+      .status-badge.partial {
+        color: var(--warn-strong);
+        background: var(--warn-soft);
+        border-color: rgba(217, 119, 6, 0.24);
+      }
+
+      .status-badge.unknown {
+        color: #475569;
+        background: var(--neutral-soft);
+        border-color: rgba(100, 116, 139, 0.2);
+      }
+
+      .service-meta {
         display: flex;
-        justify-content: space-between;
+        flex-wrap: wrap;
         align-items: center;
-        gap: 12px;
-        margin-top: 8px;
-      }
-
-      .meta-text {
+        gap: 6px 14px;
+        margin: 8px 0 0;
         color: var(--muted);
         font-size: 0.78rem;
+        font-variant-numeric: tabular-nums;
       }
 
-      .availability {
-        font-size: 0.82rem;
-        color: var(--muted);
-        white-space: nowrap;
+      .service-meta .meta-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        min-width: 0;
+      }
+
+      .service-meta .meta-item.is-failure {
+        color: var(--danger-strong);
+      }
+
+      .meta-divider {
+        width: 1px;
+        height: 11px;
+        background: var(--line-strong);
       }
 
       .timeline {
-        margin-top: 10px;
+        margin-top: 12px;
         width: 100%;
+        max-width: 100%;
         min-height: 18px;
         display: block;
         position: relative;
@@ -252,25 +406,25 @@
       }
 
       .timeline rect {
-        transition: fill 0.2s ease;
+        transition: opacity 0.16s ease;
       }
 
       .timeline rect:hover {
-        filter: brightness(0.88);
+        opacity: 0.72;
       }
 
       .timeline-tooltip {
         position: fixed;
         pointer-events: none;
-        z-index: 20;
-        background: rgba(15, 23, 42, 0.92);
+        z-index: 40;
+        background: rgba(15, 23, 42, 0.94);
         color: #f8fafc;
-        padding: 6px 8px;
+        padding: 7px 10px;
         border-radius: 8px;
         font-size: 0.74rem;
-        line-height: 1.4;
-        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.24);
-        max-width: 280px;
+        line-height: 1.45;
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.28);
+        max-width: 320px;
         opacity: 0;
         transform: translateY(4px);
         transition: opacity 0.12s ease, transform 0.12s ease;
@@ -282,89 +436,219 @@
       }
 
       .children-block {
-        margin-top: 12px;
-        padding-top: 12px;
-        border-top: 1px dashed rgba(148, 163, 184, 0.35);
-        display: grid;
-        gap: 10px;
+        margin-top: 16px;
+        padding-top: 14px;
+        border-top: 1px dashed var(--line-strong);
+      }
+
+      .children-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 4px;
+        color: var(--muted);
+        font-size: 0.74rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+      }
+
+      .children-count {
+        padding: 1px 7px;
+        border-radius: 999px;
+        background: var(--neutral-soft);
+        color: var(--text-soft);
+        font-size: 0.7rem;
+        letter-spacing: 0;
       }
 
       .child-row {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        padding: 6px 0;
+        gap: 10px;
+        padding: 9px 8px;
+        border-radius: 10px;
+        transition: background 0.16s ease;
       }
 
-      .child-name {
-        display: flex;
-        min-width: 0;
-        align-items: center;
-        gap: 8px;
-        flex: 1;
-      }
+      .child-row:hover { background: #f8fafc; }
+
+      .child-row .status-badge { margin-left: auto; }
 
       .dot {
-        width: 10px;
-        height: 10px;
+        flex: none;
+        width: 8px;
+        height: 8px;
         border-radius: 50%;
         display: inline-block;
       }
 
-      .dot.healthy { background: var(--green); }
-      .dot.unhealthy { background: var(--red); }
-      .dot.partial { background: #fbbf24; }
-      .dot.unknown { background: #94a3b8; }
+      .dot.healthy { background: var(--ok); }
+      .dot.unhealthy { background: var(--danger); }
+      .dot.partial { background: var(--warn); }
+      .dot.unknown { background: var(--muted-soft); }
 
-      .child-name-text {
-        font-size: 0.82rem;
-        line-height: 1.4;
+      .child-name {
+        flex: none;
+        max-width: 46%;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        color: #1e293b;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--text-soft);
+        text-decoration: none;
+      }
+
+      .child-name:hover {
+        color: var(--link-strong);
+        text-decoration: underline;
       }
 
       .child-hint {
-        font-size: 0.78rem;
-        color: var(--muted);
+        flex: 1;
+        min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        color: var(--muted);
+        font-size: 0.76rem;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .panel-legend {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 18px;
+        padding: 12px 20px 14px;
+        border-top: 1px solid var(--line);
+        background: #fbfcfe;
+        color: var(--muted);
+        font-size: 0.74rem;
+      }
+
+      .legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .legend-swatch {
+        width: 10px;
+        height: 10px;
+        border-radius: 3px;
+      }
+
+      .legend-swatch.healthy { background: #22c55e; }
+      .legend-swatch.unhealthy { background: #ef4444; }
+      .legend-swatch.unknown { background: #cbd5e1; }
+
+      .legend-note {
+        margin-left: auto;
+        color: var(--muted-soft);
       }
 
       .empty-state {
-        padding: 22px 18px;
-        color: var(--muted);
-        background: rgba(255,255,255,0.55);
-        border: 1px dashed rgba(148, 163, 184, 0.5);
-        border-radius: 12px;
+        padding: 40px 20px;
+        gap: 8px;
       }
 
-      @media (max-width: 640px) {
-        .subrow { align-items: flex-start; flex-direction: column; }
-        .availability { white-space: normal; }
+      .empty-state svg {
+        color: var(--muted-soft);
+        margin-bottom: 2px;
+      }
+
+      @media (max-width: 720px) {
+        .summary-card {
+          padding: 16px;
+        }
+
+        .summary-icon {
+          width: 32px;
+          height: 32px;
+        }
+
+        .summary-chip {
+          order: 3;
+          margin-left: 46px;
+        }
+
+        .panel-header {
+          padding: 14px 16px;
+        }
+
+        .panel-hint { display: none; }
+
+        .range-label { padding: 0 2px; }
+
+        .range-hint { display: none; }
+
+        .service-card {
+          padding: 16px;
+        }
+
+        .child-name {
+          max-width: 52%;
+        }
+
+        .meta-divider { display: none; }
+
+        .child-hint { display: none; }
+
+        .panel-legend {
+          padding: 12px 16px;
+        }
+
+        .legend-note { display: none; }
       }
     </style>
 {% endblock %}
 
 {% block content %}
-    <div class="container">
-      <div id="summary" class="summary-card" aria-live="polite"></div>
-      <div id="meta" class="meta-text" style="margin: 0 0 12px;">加载中…</div>
-      <section class="status-panel">
-        <div class="panel-header">
-          <h2 class="panel-title">系统状态</h2>
-          <div class="range-picker">
-            <button id="range-prev-btn" class="range-btn" type="button">‹</button>
-            <span id="range-text">最近3个月</span>
-            <button id="range-next-btn" class="range-btn" type="button">›</button>
-          </div>
-        </div>
-        <div id="roots" class="status-stack"></div>
-      </section>
+    <div class="page-head">
+      <div>
+        <h1>服务状态</h1>
+        <p class="page-subtitle">每分钟自动检测，状态异常时通过邮件通知。</p>
+      </div>
+      <p class="page-meta">
+        <span class="live-dot" aria-hidden="true"></span>
+        <span id="meta">正在加载状态…</span>
+      </p>
     </div>
+
+    <div id="summary" class="summary-card is-neutral" aria-live="polite"></div>
+
+    <section class="status-panel">
+      <div class="panel-header">
+        <div class="panel-heading">
+          <h2 class="panel-title">服务明细</h2>
+          <span class="panel-hint">按天汇总历史检测结果</span>
+        </div>
+        <div class="range-picker" role="group" aria-label="时间范围">
+          <button id="range-prev-btn" class="range-btn" type="button" aria-label="上一时间段">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+          </button>
+          <span class="range-label">
+            <span id="range-text" class="range-text">近 128 天</span>
+            <span class="range-hint">按天</span>
+          </span>
+          <button id="range-next-btn" class="range-btn" type="button" aria-label="下一时间段">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div id="roots" class="status-stack"></div>
+      <div class="panel-legend">
+        <span class="legend-item"><i class="legend-swatch healthy"></i>正常</span>
+        <span class="legend-item"><i class="legend-swatch unhealthy"></i>异常</span>
+        <span class="legend-item"><i class="legend-swatch unknown"></i>无数据</span>
+        <span class="legend-note">悬停色块可查看当天检测详情</span>
+      </div>
+    </section>
 {% endblock %}
 
 {% block scripts %}
@@ -420,9 +704,27 @@
         return `<span class="dot ${statusClass(status)}"></span>`;
       }
 
+      function formatStamp(value, short = false) {
+        if (!value) return '';
+        const normalized = String(value).replace('T', ' ');
+        return short ? normalized.slice(5, 19) : normalized.slice(0, 19);
+      }
+
       function failureHintText(hint) {
-        if (!hint) return '最近失败：暂无';
-        return `最近失败：${hint.check_time} · ${hint.summary}`;
+        if (!hint) return '暂无失败记录';
+        return `最近失败：${formatStamp(hint.check_time)} · ${hint.summary}`;
+      }
+
+      function failureMetaHtml(hint) {
+        if (!hint) {
+          return '<span class="meta-item">近期无失败</span>';
+        }
+        return `
+          <span class="meta-item is-failure" title="${escapeHtml(failureHintText(hint))}">
+            ${statusDot('unhealthy')}
+            最近失败 ${formatStamp(hint.check_time, true)}
+          </span>
+        `;
       }
 
       function normalizeDate(date) {
@@ -461,7 +763,7 @@
 
       function refreshRangeText() {
         if (!rangeTextEl) return;
-        rangeTextEl.textContent = `${formatDate(rangeStartDate)} - ${formatDate(rangeEndDate)}`;
+        rangeTextEl.textContent = `${formatDate(rangeStartDate)} – ${formatDate(rangeEndDate)}`;
         updateRangeButtons();
       }
 
@@ -513,7 +815,7 @@
           healthy: '#22c55e',
           unhealthy: '#ef4444',
           partial: '#fbbf24',
-          unknown: '#94a3b8'
+          unknown: '#cbd5e1'
         };
         const cells = Array.isArray(statuses) ? statuses : [];
         const displayCells = cells.length ? cells : Array(options.defaultCount).fill('unknown');
@@ -527,7 +829,7 @@
             const text = options.tooltipText(item, index);
             return text ? ` data-tooltip="${escapeHtml(text)}"` : '';
           })() : '';
-          return `<rect x="${x}" y="0" width="${options.cellWidth}" height="${options.height}" fill="${color}" opacity="${status === 'healthy' ? 0.92 : 1}"${attrs}></rect>`;
+          return `<rect x="${x}" y="0" width="${options.cellWidth}" height="${options.height}" rx="2" fill="${color}" opacity="${status === 'healthy' ? 0.92 : 1}"${attrs}></rect>`;
         }).join('');
 
         return `
@@ -567,7 +869,7 @@
           className: 'daily-timeline',
           ariaLabel: `${formatDate(rangeStartDate)} 至 ${formatDate(rangeEndDate)} 按天趋势`,
           defaultCount: RANGE_WINDOW_DAYS,
-          cellWidth: 5,
+          cellWidth: 6,
           gap: 2,
           height: 20,
           tooltipText: dailyTooltipText
@@ -580,29 +882,35 @@
           ariaLabel: '最近3小时趋势',
           defaultCount: 180,
           cellWidth: 4,
-          gap: 1,
+          gap: 2,
           height: 12
         });
       }
 
       function renderServiceSummary(node) {
         const service = node.service || {};
-        const calendarLink = `/services/${service.id}/failure-calendar`;
+        const calendarLink = `/services/${service.id}/service-status-calendar`;
         const status = resolveNodeState(node);
         return `
-          <div class="service-row">
-            <div class="service-meta">
-              <span class="service-info" title="查看失败日历">i</span>
-              <div class="service-name"><a href="${calendarLink}">${service.name || '未命名服务'}</a></div>
+          <div class="service-top">
+            <div class="service-ident">
+              <a class="service-name" href="${calendarLink}" title="查看 ${escapeHtml(service.name || '未命名服务')} 的服务状态日历">${escapeHtml(service.name || '未命名服务')}</a>
+              <a class="icon-link" href="${calendarLink}" title="查看服务状态日历" aria-label="查看 ${escapeHtml(service.name || '未命名服务')} 的服务状态日历">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+                  <line x1="16" y1="2" x2="16" y2="6"></line>
+                  <line x1="8" y1="2" x2="8" y2="6"></line>
+                  <line x1="3" y1="10" x2="21" y2="10"></line>
+                </svg>
+              </a>
             </div>
             <span class="status-badge ${statusClass(status)}">${statusText(status)}</span>
           </div>
-          <div class="subrow">
-            <div class="meta-text">服务状态：${statusText(status)}</div>
-            <div class="availability">${node.failure_hint ? '最近失败' : '无最近失败'}</div>
-          </div>
-          <div class="meta-text" style="margin-top: 4px;">最近检测：${node.last_check_time || '暂无'}</div>
-          <div class="meta-text" style="margin-top: 4px;">${failureHintText(node.failure_hint)}</div>
+          <p class="service-meta">
+            <span class="meta-item">最近检测 ${node.last_check_time ? formatStamp(node.last_check_time) : '暂无'}</span>
+            <span class="meta-divider" aria-hidden="true"></span>
+            ${failureMetaHtml(node.failure_hint)}
+          </p>
           <div class="timeline">${renderDailyTimeline(node._daily || [])}</div>
         `;
       }
@@ -610,27 +918,33 @@
       function renderChildRow(child) {
         const service = child.service || {};
         const status = child.status || 'unknown';
-        const calendarLink = `/services/${service.id}/failure-calendar`;
+        const calendarLink = `/services/${service.id}/service-status-calendar`;
+        const hint = child.failure_hint ? failureHintText(child.failure_hint) : '暂无失败记录';
+        const hintLabel = child.failure_hint ? `最近失败 ${formatStamp(child.failure_hint.check_time, true)}` : '暂无失败记录';
         return `
           <div class="child-row">
-            <div class="child-name">
-              ${statusDot(status)}
-              <span class="child-name-text"><a class="link" href="${calendarLink}">${service.name || '未命名服务'}</a></span>
-            </div>
+            ${statusDot(status)}
+            <a class="child-name" href="${calendarLink}" title="查看服务状态日历">${escapeHtml(service.name || '未命名服务')}</a>
+            <span class="child-hint" title="${escapeHtml(hint)}">${escapeHtml(hintLabel)}</span>
             <span class="status-badge ${statusClass(status)}">${statusText(status)}</span>
           </div>
-          <div class="child-hint">${child.failure_hint ? failureHintText(child.failure_hint) : '暂无最近失败记录'}</div>
         `;
       }
 
       function renderRootCard(root) {
         const children = root.children || [];
+        const childrenHtml = children.length
+          ? `
+            <div class="children-block">
+              <div class="children-head">子服务<span class="children-count">${children.length}</span></div>
+              ${children.map(renderChildRow).join('')}
+            </div>
+          `
+          : '';
         return `
           <article class="service-card">
             ${renderServiceSummary(root)}
-            <div class="children-block">
-              ${children.length ? children.map(renderChildRow).join('') : '<div class="meta-text">暂无子服务</div>'}
-            </div>
+            ${childrenHtml}
           </article>
         `;
       }
@@ -662,61 +976,65 @@
       }
 
       function renderSummary(roots) {
-        if (!roots.length) {
-          summaryEl.innerHTML = `
-            <div class="summary-row">
-              <span class="summary-dot">!</span>
-              <h3 class="summary-title">暂无监控数据</h3>
-            </div>
-            <p class="summary-subtitle">请先到“管理配置”中新增根服务与子服务。</p>
-          `;
-          return;
-        }
-
         const states = roots.map((item) => resolveNodeState(item));
-        const allHealthy = states.every((state) => state === 'healthy');
+        const allHealthy = states.length > 0 && states.every((state) => state === 'healthy');
         const hasPartial = states.some((state) => state === 'partial');
         const hasUnhealthy = states.some((state) => state === 'unhealthy');
         const hasUnknown = states.some((state) => state === 'unknown');
 
         let title = '一切运行正常';
-        let detail = '所有系统均按预期运行。';
-        let dot = '✓';
-        let dotColor = 'var(--green)';
+        let detail = '所有系统均按预期运行，暂无需要处理的事项。';
+        let icon = '✓';
+        let tone = 'healthy';
 
-        if (hasPartial) {
+        if (!roots.length) {
+          title = '暂无监控数据';
+          detail = '请先到 “管理配置” 中新增根服务与子服务。';
+          icon = '!';
+          tone = 'neutral';
+        } else if (hasPartial) {
           title = '部分服务异常';
           detail = '部分服务正常，部分子服务当前存在异常。';
-          dot = '!';
-          dotColor = '#fbbf24';
+          icon = '!';
+          tone = 'warning';
         } else if (hasUnhealthy) {
           title = '存在异常服务';
           detail = '请关注异常服务并尽快排查。';
-          dot = '!';
-          dotColor = 'var(--red)';
+          icon = '!';
+          tone = 'critical';
         } else if (hasUnknown) {
           title = '部分服务待确认';
           detail = '部分系统状态尚未确认，请稍后再试。';
-          dot = '?';
-          dotColor = '#64748b';
-        }
-
-        if (!allHealthy && !hasPartial && !hasUnhealthy && !hasUnknown) {
+          icon = '?';
+          tone = 'neutral';
+        } else if (!allHealthy) {
           title = '暂无监控数据';
           detail = '当前没有可用的服务状态数据。';
-          dot = '!';
-          dotColor = '#64748b';
+          icon = '!';
+          tone = 'neutral';
         }
 
+        const childCount = roots.reduce((total, root) => total + ((root.children || []).length), 0);
         const recentHours = buildSummaryRecentHours(roots);
+        const countChip = roots.length
+          ? `${roots.length} 个服务${childCount ? ` · ${childCount} 个子服务` : ''}`
+          : '等待配置';
+
+        summaryEl.className = `summary-card is-${tone}`;
         summaryEl.innerHTML = `
-          <div class="summary-row">
-            <span class="summary-dot" style="background: ${dotColor}; box-shadow: 0 0 0 4px ${dotColor}22;">${dot}</span>
-            <h3 class="summary-title">${title}</h3>
+          <div class="summary-head">
+            <span class="summary-icon" aria-hidden="true">${icon}</span>
+            <div class="summary-copy">
+              <h2 class="summary-title">${title}</h2>
+              <p class="summary-subtitle">${detail}</p>
+            </div>
+            <span class="summary-chip">${countChip}</span>
           </div>
-          <p class="summary-subtitle">${detail}</p>
-          <div class="summary-recent">
-            <p class="summary-recent-title">最近3小时状态</p>
+          <div class="summary-trend">
+            <div class="trend-head">
+              <p class="trend-title">最近 3 小时状态</p>
+              <span class="trend-scale">3 小时前 → 现在</span>
+            </div>
             <div class="timeline">${renderRecentHoursTimeline(recentHours)}</div>
           </div>
         `;
@@ -725,7 +1043,15 @@
       function renderRoots(roots) {
         rootsEl.innerHTML = '';
         if (!roots.length) {
-          rootsEl.innerHTML = '<div class="empty-state">暂无服务，请先到“管理配置”新增根服务与子服务。</div>';
+          rootsEl.innerHTML = `
+            <div class="empty-state">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 12h4l2.5-6 4 12 2.5-6h5"></path>
+              </svg>
+              <strong>还没有配置任何服务</strong>
+              <span>请先到 “管理配置” 中新增根服务与子服务。</span>
+            </div>
+          `;
           return;
         }
         rootsEl.innerHTML = roots.map(renderRootCard).join('');
@@ -811,20 +1137,23 @@
       async function loadStatus() {
         const res = await fetch('/api/status-tree');
         if (!res.ok) {
-          metaEl.textContent = '加载失败';
+          metaEl.textContent = '状态加载失败';
+          summaryEl.className = 'summary-card is-critical';
           summaryEl.innerHTML = `
-            <div class="summary-row">
-              <span class="summary-dot" style="background: var(--red); box-shadow: 0 0 0 4px rgba(239,68,68,0.15);">!</span>
-              <h3 class="summary-title">状态加载失败</h3>
+            <div class="summary-head">
+              <span class="summary-icon" aria-hidden="true">!</span>
+              <div class="summary-copy">
+                <h2 class="summary-title">状态加载失败</h2>
+                <p class="summary-subtitle">请刷新页面或检查后端状态。</p>
+              </div>
             </div>
-            <p class="summary-subtitle">请刷新页面或检查后端状态。</p>
           `;
           return;
         }
 
         const data = await res.json();
         const roots = data.roots || [];
-        metaEl.textContent = `最近刷新：${data.generated_at || '未知'}`;
+        metaEl.textContent = `最近刷新 ${formatStamp(data.generated_at) || '未知'} · 每 20 秒自动更新`;
 
         const enrichedRoots = await Promise.all(
           roots.map(async (root) => {
@@ -851,6 +1180,9 @@
       refreshRangeText();
       initRangePicker();
       bindTimelineTooltip();
-      setInterval(loadStatus, 20000);
+      setInterval(() => {
+        if (document.hidden) return;
+        void loadStatus();
+      }, 20000);
     </script>
 {% endblock %}

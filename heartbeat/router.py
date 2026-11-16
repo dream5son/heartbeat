@@ -1,50 +1,98 @@
-import calendar
 import datetime as dt
 
 from flask import Flask, abort, jsonify, render_template, request
+from sqlalchemy import text
 
+from .logging_config import logger
 from .model import (
+    DEFAULT_ALARM_MAX_PER_WINDOW,
+    DEFAULT_ALARM_WINDOW_MINUTES,
     DEFAULT_SUCCESS_RULE,
-    DailyCheck,
-    FailureRecord,
-    Service,
-    ServiceEndpoint,
     SessionLocal,
-    YearlyCheck,
+    normalize_alarm_channels,
+    normalize_alarm_int,
     normalize_success_rule,
+    parse_alarm_recipients,
 )
 from .service import (
-    _combine_service_state,
-    _daily_row_detail,
-    _daily_row_health,
-    _latest_failure_hint,
-    _service_status_history,
-    _service_status_node,
+    ServiceHasChildrenError,
+    children_recent_days,
+    create_service,
+    delete_service,
+    failure_records_for_day,
+    list_alarm_records,
+    list_services,
     run_health_checks,
+    service_current_status,
+    service_daily_detail,
+    service_failure_records,
+    service_recent_days,
+    service_recent_hours,
+    service_status_calendar_data,
     service_to_dict,
+    status_tree,
+    update_service,
 )
 
 
-def parse_heartbeat_configs(payload: dict[str, object]) -> list[tuple[str, str]]:
+def _parse_alarm_settings(payload: dict[str, object]) -> dict[str, object]:
+    alarm_enabled = bool(payload.get("alarm_enabled", False))
+    channels_value = payload.get("alarm_channels")
+    if alarm_enabled and not channels_value:
+        channels_value = "email"
+    channels = normalize_alarm_channels(channels_value)
+    recipients = parse_alarm_recipients(payload.get("alarm_recipients"))
+    if alarm_enabled and "email" in channels.split(",") and not recipients:
+        abort(400, description="alarm_recipients is required when alarm is enabled")
+    return {
+        "alarm_enabled": alarm_enabled,
+        "alarm_channels": channels,
+        "alarm_recipients": ",".join(recipients),
+        "alarm_window_minutes": normalize_alarm_int(
+            payload.get("alarm_window_minutes"), DEFAULT_ALARM_WINDOW_MINUTES
+        ),
+        "alarm_max_per_window": normalize_alarm_int(
+            payload.get("alarm_max_per_window"), DEFAULT_ALARM_MAX_PER_WINDOW
+        ),
+    }
+
+
+def parse_heartbeat_configs(payload: dict[str, object]) -> list[dict[str, object]]:
     if "heartbeat_configs" in payload:
         configs = payload["heartbeat_configs"]
         if not isinstance(configs, list):
             abort(400, description="heartbeat_configs must be a list")
-        normalized_configs: list[tuple[str, str]] = []
+        normalized_configs: list[dict[str, object]] = []
         for item in configs:
             if not isinstance(item, dict):
                 abort(400, description="heartbeat_configs entries must be objects")
             heartbeat_url = str(item.get("heartbeat_url") or "").strip()
             if not heartbeat_url:
                 continue
-            success_rule = normalize_success_rule(item.get("success_rule"))
-            normalized_configs.append((heartbeat_url, success_rule))
+            config: dict[str, object] = {
+                "heartbeat_url": heartbeat_url,
+                "success_rule": normalize_success_rule(item.get("success_rule")),
+            }
+            config.update(_parse_alarm_settings(item))
+            normalized_configs.append(config)
         return normalized_configs
 
     heartbeat_urls = payload.get("heartbeat_urls") or []
     if not isinstance(heartbeat_urls, list):
         abort(400, description="heartbeat_urls must be a list")
-    return [(str(url), DEFAULT_SUCCESS_RULE) for url in heartbeat_urls if url]
+    return [
+        {
+            "heartbeat_url": str(url),
+            "success_rule": DEFAULT_SUCCESS_RULE,
+            "alarm_enabled": False,
+            "alarm_channels": "",
+            "alarm_recipients": "",
+            "alarm_window_minutes": DEFAULT_ALARM_WINDOW_MINUTES,
+            "alarm_max_per_window": DEFAULT_ALARM_MAX_PER_WINDOW,
+        }
+        for url in heartbeat_urls
+        if url
+    ]
 
 
 def _resolve_date_window(default_days: int, max_days: int) -> tuple[dt.date, dt.date, int]:
@@ -66,10 +114,7 @@ def _resolve_date_window(default_days: int, max_days: int) -> tuple[dt.date, dt.
             abort(400, description=f"date range must be <= {max_days} days")
         return start_date, end_date, days
 
-    try:
-        days = int(request.args.get("days", default_days))
-    except (TypeError, ValueError):
-        abort(400, description="days must be an integer")
+    days = request.args.get("days", default_days, type=int)
     if days < 1 or days > max_days:
         abort(400, description=f"days must be between 1 and {max_days}")
     end_date = dt.date.today()
@@ -92,17 +137,28 @@ def create_app() -> Flask:
     def service_config() -> object:
         return render_template("service_config.html")
 
-    @app.get("/api/services")
-    def list_services() -> object:
+    @app.get("/healthz")
+    def healthz() -> object:
         session = SessionLocal()
         try:
-            services = session.query(Service).all()
-            return jsonify({"services": [service_to_dict(s) for s in services]})
+            session.execute(text("SELECT 1"))
+        except Exception:
+            logger.exception("health check failed: database unavailable")
+            return jsonify({"status": "error"}), 503
+        finally:
+            session.close()
+        return jsonify({"status": "ok"})
+
+    @app.get("/api/services")
+    def list_services_api() -> object:
+        session = SessionLocal()
+        try:
+            return jsonify({"services": list_services(session)})
         finally:
             session.close()
 
     @app.post("/api/services")
-    def create_service() -> object:
+    def create_service_api() -> object:
         payload = request.get_json(force=True, silent=False)
         name = (payload.get("name") or "").strip()
         if not name:
@@ -110,111 +166,119 @@ def create_app() -> Flask:
 
         heartbeat_configs = parse_heartbeat_configs(payload)
 
-        service = Service(
-            name=name,
-            parent_id=payload.get("parent_id"),
-            enabled=bool(payload.get("enabled", True)),
-        )
-        for heartbeat_url, success_rule in heartbeat_configs:
-            service.endpoints.append(
-                ServiceEndpoint(
-                    heartbeat_url=heartbeat_url,
-                    success_rule=success_rule,
-                )
-            )
-
         session = SessionLocal()
         try:
-            session.add(service)
-            session.commit()
-            session.refresh(service)
+            service = create_service(
+                session,
+                name=name,
+                parent_id=payload.get("parent_id"),
+                enabled=bool(payload.get("enabled", True)),
+                heartbeat_configs=heartbeat_configs,
+            )
             return jsonify(service_to_dict(service)), 201
         finally:
             session.close()
 
     @app.patch("/api/services/<int:service_id>")
-    def update_service(service_id: int) -> object:
+    def update_service_api(service_id: int) -> object:
         payload = request.get_json(force=True, silent=False)
+        heartbeat_configs = None
+        if "heartbeat_urls" in payload or "heartbeat_configs" in payload:
+            heartbeat_configs = parse_heartbeat_configs(payload)
+
         session = SessionLocal()
         try:
-            service = session.get(Service, service_id)
+            service = update_service(
+                session,
+                service_id,
+                payload,
+                heartbeat_configs=heartbeat_configs,
+            )
             if service is None:
                 abort(404, description="service not found")
-
-            if "name" in payload:
-                service.name = payload["name"].strip()
-            if "parent_id" in payload:
-                service.parent_id = payload["parent_id"]
-            if "enabled" in payload:
-                service.enabled = bool(payload["enabled"])
-            if "heartbeat_urls" in payload or "heartbeat_configs" in payload:
-                heartbeat_configs = parse_heartbeat_configs(payload)
-                service.endpoints.clear()
-                for heartbeat_url, success_rule in heartbeat_configs:
-                    service.endpoints.append(
-                        ServiceEndpoint(
-                            heartbeat_url=heartbeat_url,
-                            success_rule=success_rule,
-                        )
-                    )
-
-            session.commit()
-            session.refresh(service)
             return jsonify(service_to_dict(service))
+        finally:
+            session.close()
+
+    @app.delete("/api/services/<int:service_id>")
+    def delete_service_api(service_id: int) -> object:
+        session = SessionLocal()
+        try:
+            try:
+                deleted = delete_service(session, service_id)
+            except ServiceHasChildrenError:
+                abort(409, description="service has child services; delete child services first")
+            if not deleted:
+                abort(404, description="service not found")
+            return jsonify({"status": "ok"})
         finally:
             session.close()
 
     @app.post("/api/check-now")
     def check_now() -> object:
+        logger.info("manual health check requested")
         run_health_checks()
         return jsonify({"status": "ok"})
+
+    @app.get("/alarm-records")
+    def alarm_records_page() -> object:
+        return render_template("alarm_records.html")
+
+    @app.get("/api/alarm-records")
+    def list_alarm_records_api() -> object:
+        start_date, end_date, _ = _resolve_date_window(default_days=7, max_days=180)
+
+        send_status = (request.args.get("send_status") or "").strip()
+        if send_status and send_status not in {"sent", "failed"}:
+            abort(400, description="send_status must be sent or failed")
+
+        limit = request.args.get("limit", 100, type=int)
+        offset = request.args.get("offset", 0, type=int)
+        if limit < 1 or limit > 500:
+            abort(400, description="limit must be between 1 and 500")
+        if offset < 0:
+            abort(400, description="offset must be >= 0")
+
+        service_id = request.args.get("service_id", type=int)
+
+        start_dt = dt.datetime.combine(start_date, dt.time.min)
+        end_dt = dt.datetime.combine(end_date + dt.timedelta(days=1), dt.time.min)
+
+        session = SessionLocal()
+        try:
+            return jsonify(
+                list_alarm_records(
+                    session,
+                    start_dt=start_dt,
+                    end_dt=end_dt,
+                    service_id=service_id,
+                    send_status=send_status,
+                    limit=limit,
+                    offset=offset,
+                )
+            )
+        finally:
+            session.close()
 
     @app.get("/api/services/<int:service_id>/status/current")
     def current_status(service_id: int) -> object:
         session = SessionLocal()
         try:
-            service = session.get(Service, service_id)
-            if service is None:
+            result = service_current_status(session, service_id)
+            if result is None:
                 abort(404, description="service not found")
-
-            latest_status, latest_time = _latest_status_snapshot(session, service_id)
-
-            return jsonify(
-                {
-                    "service": service_to_dict(service),
-                    "status": _status_text(latest_status),
-                    "last_check_time": latest_time,
-                }
-            )
+            return jsonify(result)
         finally:
             session.close()
 
     @app.get("/api/status-tree")
-    def status_tree() -> object:
+    def status_tree_api() -> object:
         session = SessionLocal()
         try:
-            roots = (
-                session.query(Service)
-                .filter(Service.parent_id.is_(None))
-                .order_by(Service.name.asc())
-                .all()
-            )
-            output = []
-            for root in roots:
-                child_nodes = [_service_status_node(session, child) for child in root.children]
-                root_node = _service_status_node(session, root)
-
-                combined_statuses = [root_node["status"], *[node["status"] for node in child_nodes]]
-                root_node["status"] = _combine_service_state(combined_statuses)
-                root_node["children"] = child_nodes
-                scoped_ids = [root.id, *[child.id for child in root.children]]
-                root_node["failure_hint"] = _latest_failure_hint(session, scoped_ids)
-                output.append(root_node)
-
             return jsonify(
                 {
                     "generated_at": dt.datetime.now().isoformat(),
-                    "roots": output,
+                    "roots": status_tree(session),
                 }
             )
         finally:
@@ -222,129 +286,59 @@ def create_app() -> Flask:
 
     @app.get("/api/services/<int:service_id>/status/recent")
     def recent_status(service_id: int) -> object:
-        days = int(request.args.get("days", 7))
+        days = request.args.get("days", 7, type=int)
         if days < 1:
             abort(400, description="days must be >= 1")
 
         session = SessionLocal()
         try:
-            service = session.get(Service, service_id)
-            if service is None:
+            result = service_recent_days(session, service_id, days)
+            if result is None:
                 abort(404, description="service not found")
-
-            start_date = dt.date.today() - dt.timedelta(days=days - 1)
-            rows = (
-                session.query(DailyCheck)
-                .filter(DailyCheck.service_id == service_id, DailyCheck.date >= start_date)
-                .order_by(DailyCheck.date.asc())
-                .all()
-            )
-            row_map = {row.date: row for row in rows}
-
-            result = []
-            for offset in range(days):
-                current_date = start_date + dt.timedelta(days=offset)
-                health = _daily_row_health(row_map.get(current_date))
-                result.append(
-                    {
-                        "date": current_date.isoformat(),
-                        "status": "healthy" if health == 1 else "unhealthy" if health == 0 else "unknown",
-                    }
-                )
-
-            return jsonify({"service": service_to_dict(service), "days": result})
+            return jsonify(result)
         finally:
             session.close()
 
     @app.get("/api/services/<int:service_id>/status/recent-daily-detail")
     def recent_daily_detail(service_id: int) -> object:
-        start_date, end_date, days = _resolve_date_window(default_days=90, max_days=180)
+        start_date, end_date, _ = _resolve_date_window(default_days=90, max_days=180)
 
         session = SessionLocal()
         try:
-            service = session.get(Service, service_id)
-            if service is None:
+            result = service_daily_detail(session, service_id, start_date, end_date)
+            if result is None:
                 abort(404, description="service not found")
-
-            rows = (
-                session.query(DailyCheck)
-                .filter(
-                    DailyCheck.service_id == service_id,
-                    DailyCheck.date >= start_date,
-                    DailyCheck.date <= end_date,
-                )
-                .order_by(DailyCheck.date.asc())
-                .all()
-            )
-            row_map = {row.date: row for row in rows}
-
-            result = []
-            for offset in range(days):
-                current_date = start_date + dt.timedelta(days=offset)
-                detail = _daily_row_detail(row_map.get(current_date))
-                result.append({"date": current_date.isoformat(), **detail})
-
-            return jsonify({"service": service_to_dict(service), "days": result})
+            return jsonify(result)
         finally:
             session.close()
 
     @app.get("/api/services/<int:service_id>/status/recent-hours")
     def recent_status_hours(service_id: int) -> object:
-        hours = int(request.args.get("hours", 12))
+        hours = request.args.get("hours", 12, type=int)
         if hours < 1 or hours > 24:
             abort(400, description="hours must be between 1 and 24")
 
         session = SessionLocal()
         try:
-            service = session.get(Service, service_id)
-            if service is None:
+            result = service_recent_hours(session, service_id, hours)
+            if result is None:
                 abort(404, description="service not found")
-
-            return jsonify(
-                {
-                    "service": service_to_dict(service),
-                    "hours": hours,
-                    "status": _service_status_history(session, service_id, hours=hours),
-                }
-            )
+            return jsonify(result)
         finally:
             session.close()
 
     @app.get("/api/services/<int:service_id>/children/status/recent")
     def children_recent_status(service_id: int) -> object:
-        days = int(request.args.get("days", 7))
+        days = request.args.get("days", 7, type=int)
         if days < 1:
             abort(400, description="days must be >= 1")
 
         session = SessionLocal()
         try:
-            parent = session.get(Service, service_id)
-            if parent is None:
+            result = children_recent_days(session, service_id, days)
+            if result is None:
                 abort(404, description="service not found")
-
-            start_date = dt.date.today() - dt.timedelta(days=days - 1)
-            output = []
-            for child in parent.children:
-                rows = (
-                    session.query(DailyCheck)
-                    .filter(DailyCheck.service_id == child.id, DailyCheck.date >= start_date)
-                    .order_by(DailyCheck.date.asc())
-                    .all()
-                )
-                row_map = {row.date: row for row in rows}
-                child_days = []
-                for offset in range(days):
-                    current_date = start_date + dt.timedelta(days=offset)
-                    health = _daily_row_health(row_map.get(current_date))
-                    child_days.append(
-                        {
-                            "date": current_date.isoformat(),
-                            "status": "healthy" if health == 1 else "unhealthy" if health == 0 else "unknown",
-                        }
-                    )
-                output.append({"service": service_to_dict(child), "days": child_days})
-
-            return jsonify({"parent_service": service_to_dict(parent), "children": output})
+            return jsonify(result)
         finally:
             session.close()
 
@@ -359,113 +353,52 @@ def create_app() -> Flask:
         except ValueError:
             abort(400, description="invalid date format")
 
-        start_dt = dt.datetime.combine(check_date, dt.time.min)
-        end_dt = dt.datetime.combine(check_date + dt.timedelta(days=1), dt.time.min)
-
         session = SessionLocal()
         try:
-            records = (
-                session.query(FailureRecord)
-                .filter(
-                    FailureRecord.service_id == service_id,
-                    FailureRecord.check_time >= start_dt,
-                    FailureRecord.check_time < end_dt,
-                )
-                .order_by(FailureRecord.check_time.asc())
-                .all()
-            )
             return jsonify(
                 {
                     "service_id": service_id,
                     "date": check_date.isoformat(),
-                    "failures": [
-                        {
-                            "id": row.id,
-                            "check_time": row.check_time.isoformat(),
-                            "status": row.status,
-                            "log": row.log,
-                        }
-                        for row in records
-                    ],
+                    "failures": failure_records_for_day(session, service_id, check_date),
                 }
             )
         finally:
             session.close()
 
-    @app.get("/services/<int:service_id>/failure-calendar")
-    def failure_calendar(service_id: int) -> object:
-        year = int(request.args.get("year", dt.date.today().year))
+    @app.get("/services/<int:service_id>/failures")
+    def failure_logs_page(service_id: int) -> object:
+        date_text = request.args.get("date")
+        if not date_text:
+            abort(400, description="date is required (YYYY-MM-DD)")
+
+        try:
+            check_date = dt.date.fromisoformat(date_text)
+        except ValueError:
+            abort(400, description="invalid date format")
 
         session = SessionLocal()
         try:
-            service = session.get(Service, service_id)
-            if service is None:
+            data = service_failure_records(session, service_id, check_date)
+            if data is None:
                 abort(404, description="service not found")
+            return render_template("failure_logs.html", **data)
+        finally:
+            session.close()
 
-            yearly = (
-                session.query(YearlyCheck)
-                .filter(YearlyCheck.service_id == service_id, YearlyCheck.year == year)
-                .one_or_none()
-            )
-            unhealthy_days = set()
-            if yearly is not None:
-                for month in range(1, 13):
-                    _, month_days = calendar.monthrange(year, month)
-                    if month == 2:
-                        month_days = 29
-                    for day in range(1, month_days + 1):
-                        value = getattr(yearly, f"day_{month:02d}{day:02d}")
-                        if value == 0:
-                            unhealthy_days.add(dt.date(year, month, day).isoformat())
+    @app.get("/services/<int:service_id>/service-status-calendar")
+    def service_status_calendar(service_id: int) -> object:
+        year = request.args.get("year", dt.date.today().year, type=int)
+        month = request.args.get("month", dt.date.today().month, type=int)
+        if not 1 <= month <= 12:
+            abort(400, description="month must be between 1 and 12")
 
-            month_weeks = {month: calendar.monthcalendar(year, month) for month in range(1, 13)}
-
-            return render_template(
-                "failure_calendar.html",
-                service=service,
-                year=year,
-                unhealthy_days=unhealthy_days,
-                month_weeks=month_weeks,
-            )
+        session = SessionLocal()
+        try:
+            data = service_status_calendar_data(session, service_id, year, month)
+            if data is None:
+                abort(404, description="service not found")
+            return render_template("service_status_calendar.html", **data)
         finally:
             session.close()
 
     return app
-
-
-def _latest_status_snapshot(session, service_id: int):
-    rows = (
-        session.query(DailyCheck)
-        .filter(DailyCheck.service_id == service_id)
-        .order_by(DailyCheck.date.desc())
-        .all()
-    )
-    for daily in rows:
-        for minute_idx in reversed(range(24 * 60)):
-            value = getattr(daily, f"minute_{minute_idx:04d}")
-            if value is None:
-                continue
-            check_time = dt.datetime.combine(
-                daily.date,
-                dt.time(hour=minute_idx // 60, minute=minute_idx % 60),
-            ).isoformat()
-            return value, check_time
-    return None, None
-
-
-def _status_text(status_value: int | None) -> str:
-    if status_value == 1:
-        return "healthy"
-    if status_value == 0:
-        return "unhealthy"
-    return "unknown"
-
-
-def _service_status_node(session, service):
-    latest_status, latest_time = _latest_status_snapshot(session, service.id)
-    return {
-        "service": service_to_dict(service),
-        "status": _status_text(latest_status),
-        "last_check_time": latest_time,
-        "failure_hint": _latest_failure_hint(session, [service.id]),
-    }

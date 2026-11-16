@@ -1,0 +1,371 @@
+{% extends "layout.html" %}
+
+{% block title %}报警记录{% endblock %}
+
+{% block page_styles %}
+  <style>
+    .page-title {
+      margin: 0 0 16px;
+    }
+
+    .panel {
+      border: 1px solid #dfe7f1;
+      border-radius: 10px;
+      padding: 16px;
+      background: #f9fbff;
+      margin-bottom: 18px;
+    }
+
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      gap: 12px;
+    }
+
+    .filters label {
+      display: grid;
+      gap: 6px;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .filters input,
+    .filters select,
+    .filters button,
+    .pager button {
+      padding: 8px 10px;
+      font-size: 14px;
+      border-radius: 6px;
+      border: 1px solid #cdd7e3;
+    }
+
+    .filters button,
+    .pager button {
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+    }
+
+    .pager button:disabled {
+      background: #94a3b8;
+      cursor: default;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid #e2e8f0;
+      padding: 8px 10px;
+      text-align: left;
+      vertical-align: top;
+      font-size: 14px;
+    }
+
+    .url-cell {
+      word-break: break-all;
+      max-width: 240px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #fff;
+      white-space: nowrap;
+    }
+
+    .badge.sent {
+      background: #16a34a;
+    }
+
+    .badge.failed {
+      background: #dc2626;
+    }
+
+    .status-code {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 6px;
+      background: #fee2e2;
+      color: #991b1b;
+      font-weight: 700;
+      font-size: 12px;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .small {
+      font-size: 12px;
+    }
+
+    details summary {
+      cursor: pointer;
+      color: var(--link);
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    .detail-table {
+      margin-top: 8px;
+      background: #fff;
+    }
+
+    .detail-table th,
+    .detail-table td {
+      font-size: 12px;
+      padding: 6px 8px;
+    }
+
+    .detail-text {
+      word-break: break-all;
+      max-width: 260px;
+    }
+
+    .detail-pre {
+      margin: 8px 0 0;
+      padding: 8px;
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 6px;
+      font-size: 12px;
+      overflow-x: auto;
+    }
+
+    .pager {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <h1 class="page-title">报警记录</h1>
+
+  <div class="panel">
+    <form class="filters" id="filter-form">
+      <label>
+        服务
+        <select id="filter-service">
+          <option value="">全部服务</option>
+        </select>
+      </label>
+      <label>
+        开始日期
+        <input type="date" id="filter-start">
+      </label>
+      <label>
+        结束日期
+        <input type="date" id="filter-end">
+      </label>
+      <label>
+        发送状态
+        <select id="filter-status">
+          <option value="">全部</option>
+          <option value="sent">已发送</option>
+          <option value="failed">发送失败</option>
+        </select>
+      </label>
+      <button type="submit">查询</button>
+    </form>
+  </div>
+
+  <div class="panel">
+    <table>
+      <thead>
+        <tr>
+          <th>报警时间</th>
+          <th>服务</th>
+          <th>检测地址</th>
+          <th>检测状态</th>
+          <th>发送状态</th>
+          <th>收件人</th>
+          <th>详情</th>
+        </tr>
+      </thead>
+      <tbody id="record-rows"></tbody>
+    </table>
+    <div class="pager">
+      <button type="button" id="prev-page">上一页</button>
+      <span id="page-info">暂无记录</span>
+      <button type="button" id="next-page">下一页</button>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    const LIMIT = 100;
+    const recordRows = document.getElementById('record-rows');
+    const pageInfo = document.getElementById('page-info');
+    const prevPageBtn = document.getElementById('prev-page');
+    const nextPageBtn = document.getElementById('next-page');
+
+    let offset = 0;
+    let total = 0;
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
+    function formatDate(date) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    function initDateFilters() {
+      const today = new Date();
+      const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6);
+      document.getElementById('filter-start').value = formatDate(start);
+      document.getElementById('filter-end').value = formatDate(today);
+    }
+
+    async function loadServices() {
+      const res = await fetch('/api/services');
+      if (!res.ok) return;
+      const data = await res.json();
+      const selector = document.getElementById('filter-service');
+      (data.services || []).forEach((service) => {
+        const option = document.createElement('option');
+        option.value = service.id;
+        option.textContent = service.name;
+        selector.appendChild(option);
+      });
+    }
+
+    function renderDetail(detailText) {
+      if (!detailText) return '—';
+      let data;
+      try {
+        data = JSON.parse(detailText);
+      } catch (err) {
+        return `<pre class="detail-pre">${escapeHtml(detailText)}</pre>`;
+      }
+
+      const endpoints = Array.isArray(data.endpoints) ? data.endpoints : [];
+      const rows = endpoints
+        .map(
+          (item) => `
+            <tr>
+              <td>${escapeHtml(item.heartbeat_url || '-')}</td>
+              <td>${escapeHtml(item.success_rule || '-')}</td>
+              <td>${item.ok ? '通过' : '失败'}</td>
+              <td>${escapeHtml(String(item.status ?? '-'))}</td>
+              <td class="detail-text">${escapeHtml(item.detail || '')}</td>
+            </tr>`
+        )
+        .join('');
+
+      return `
+        <details>
+          <summary>查看检测详情</summary>
+          <table class="detail-table">
+            <thead>
+              <tr><th>地址</th><th>规则</th><th>结果</th><th>状态</th><th>明细</th></tr>
+            </thead>
+            <tbody>${rows || '<tr><td colspan="5">无检测明细</td></tr>'}</tbody>
+          </table>
+        </details>`;
+    }
+
+    function renderRecords(records) {
+      recordRows.innerHTML = '';
+      if (!records.length) {
+        recordRows.innerHTML = '<tr><td colspan="7" class="muted">暂无报警记录</td></tr>';
+        return;
+      }
+
+      records.forEach((record) => {
+        const row = document.createElement('tr');
+        const sent = record.send_status === 'sent';
+        const errorHtml = record.error
+          ? `<div class="muted small">${escapeHtml(record.error)}</div>`
+          : '';
+        row.innerHTML = `
+          <td>${escapeHtml(record.alarm_time)}</td>
+          <td>${escapeHtml(record.service_name)}</td>
+          <td class="url-cell">${escapeHtml(record.heartbeat_url)}</td>
+          <td><span class="status-code">${escapeHtml(String(record.check_status))}</span></td>
+          <td><span class="badge ${sent ? 'sent' : 'failed'}">${sent ? '已发送' : '发送失败'}</span>${errorHtml}</td>
+          <td>${escapeHtml(record.recipients)}</td>
+          <td>${renderDetail(record.detail)}</td>
+        `;
+        recordRows.appendChild(row);
+      });
+    }
+
+    function updatePager() {
+      const start = total === 0 ? 0 : offset + 1;
+      const end = Math.min(offset + LIMIT, total);
+      pageInfo.textContent = `第 ${start}-${end} 条 / 共 ${total} 条`;
+      prevPageBtn.disabled = offset <= 0;
+      nextPageBtn.disabled = offset + LIMIT >= total;
+    }
+
+    async function loadRecords() {
+      const params = new URLSearchParams();
+      const serviceId = document.getElementById('filter-service').value;
+      const sendStatus = document.getElementById('filter-status').value;
+      const startDate = document.getElementById('filter-start').value;
+      const endDate = document.getElementById('filter-end').value;
+
+      if (serviceId) params.set('service_id', serviceId);
+      if (sendStatus) params.set('send_status', sendStatus);
+      if (startDate) params.set('start_date', startDate);
+      if (endDate) params.set('end_date', endDate);
+      params.set('limit', String(LIMIT));
+      params.set('offset', String(offset));
+
+      const res = await fetch(`/api/alarm-records?${params.toString()}`);
+      if (!res.ok) {
+        alert('加载报警记录失败');
+        return;
+      }
+      const data = await res.json();
+      total = data.total || 0;
+      renderRecords(data.records || []);
+      updatePager();
+    }
+
+    document.getElementById('filter-form').addEventListener('submit', (event) => {
+      event.preventDefault();
+      offset = 0;
+      loadRecords();
+    });
+
+    prevPageBtn.addEventListener('click', () => {
+      offset = Math.max(0, offset - LIMIT);
+      loadRecords();
+    });
+
+    nextPageBtn.addEventListener('click', () => {
+      offset += LIMIT;
+      loadRecords();
+    });
+
+    initDateFilters();
+    loadServices();
+    loadRecords();
+  </script>
+{% endblock %}

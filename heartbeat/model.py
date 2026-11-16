@@ -1,4 +1,5 @@
 import calendar
+import re
 
 from sqlalchemy import (
     Boolean,
@@ -19,6 +20,9 @@ from .config import DATABASE_URL
 
 Base = declarative_base()
 DEFAULT_SUCCESS_RULE = "status==200"
+DEFAULT_ALARM_WINDOW_MINUTES = 10
+DEFAULT_ALARM_MAX_PER_WINDOW = 1
+SUPPORTED_ALARM_CHANNELS = {"email"}
 
 
 class Service(Base):
@@ -44,6 +48,15 @@ class ServiceEndpoint(Base):
     service_id = Column(Integer, ForeignKey("services.id"), nullable=False, index=True)
     heartbeat_url = Column(String(2048), nullable=False)
     success_rule = Column(String(512), nullable=False, default=DEFAULT_SUCCESS_RULE)
+    alarm_enabled = Column(Boolean, nullable=False, default=False)
+    alarm_channels = Column(String(64), nullable=False, default="")
+    alarm_recipients = Column(String(1024), nullable=False, default="")
+    alarm_window_minutes = Column(
+        Integer, nullable=False, default=DEFAULT_ALARM_WINDOW_MINUTES
+    )
+    alarm_max_per_window = Column(
+        Integer, nullable=False, default=DEFAULT_ALARM_MAX_PER_WINDOW
+    )
 
     service = relationship("Service", back_populates="endpoints")
 
@@ -88,6 +101,24 @@ class FailureRecord(Base):
     log = Column(Text, nullable=False)
 
 
+class AlarmRecord(Base):
+    __tablename__ = "alarm_records"
+
+    id = Column(Integer, primary_key=True)
+    service_id = Column(Integer, ForeignKey("services.id"), nullable=False, index=True)
+    endpoint_id = Column(Integer, nullable=True, index=True)
+    service_name = Column(String(255), nullable=False)
+    heartbeat_url = Column(String(2048), nullable=False)
+    success_rule = Column(String(512), nullable=False)
+    alarm_time = Column(DateTime, nullable=False, index=True)
+    channel = Column(String(32), nullable=False, default="email")
+    recipients = Column(String(1024), nullable=False)
+    send_status = Column(String(32), nullable=False, index=True)
+    error = Column(Text, nullable=True)
+    check_status = Column(Integer, nullable=False)
+    detail = Column(Text, nullable=False)
+
+
 engine = create_engine(
     DATABASE_URL,
     echo=False,
@@ -106,12 +137,24 @@ def ensure_schema() -> None:
         ).fetchall()
         if not tables:
             return
-        columns = conn.exec_driver_sql("PRAGMA table_info(service_endpoints)").fetchall()
-        if any(column[1] == "success_rule" for column in columns):
-            return
-        conn.exec_driver_sql(
-            "ALTER TABLE service_endpoints ADD COLUMN success_rule VARCHAR(512) DEFAULT 'status==200' NOT NULL"
-        )
+        columns = {
+            column[1]
+            for column in conn.exec_driver_sql("PRAGMA table_info(service_endpoints)").fetchall()
+        }
+        migrations = {
+            "success_rule": "VARCHAR(512) NOT NULL DEFAULT 'status==200'",
+            "alarm_enabled": "BOOLEAN NOT NULL DEFAULT 0",
+            "alarm_channels": "VARCHAR(64) NOT NULL DEFAULT ''",
+            "alarm_recipients": "VARCHAR(1024) NOT NULL DEFAULT ''",
+            "alarm_window_minutes": f"INTEGER NOT NULL DEFAULT {DEFAULT_ALARM_WINDOW_MINUTES}",
+            "alarm_max_per_window": f"INTEGER NOT NULL DEFAULT {DEFAULT_ALARM_MAX_PER_WINDOW}",
+        }
+        for column, definition in migrations.items():
+            if column in columns:
+                continue
+            conn.exec_driver_sql(
+                f"ALTER TABLE service_endpoints ADD COLUMN {column} {definition}"
+            )
 
 
 def minute_column(check_time):
@@ -127,3 +170,44 @@ def normalize_success_rule(success_rule):
         return DEFAULT_SUCCESS_RULE
     normalized = str(success_rule).strip()
     return normalized or DEFAULT_SUCCESS_RULE
+
+
+def normalize_alarm_channels(value) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, (list, tuple, set)):
+        raw_items = [str(item) for item in value]
+    else:
+        raw_items = re.split(r"[,;\s]+", str(value))
+
+    channels: list[str] = []
+    for item in raw_items:
+        channel = item.strip().lower()
+        if channel in SUPPORTED_ALARM_CHANNELS and channel not in channels:
+            channels.append(channel)
+    return ",".join(channels)
+
+
+def parse_alarm_recipients(value) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        raw_items = [str(item) for item in value]
+    else:
+        raw_items = re.split(r"[,;\s]+", str(value))
+
+    recipients: list[str] = []
+    for item in raw_items:
+        address = item.strip()
+        if "@" not in address or address in recipients:
+            continue
+        recipients.append(address)
+    return recipients
+
+
+def normalize_alarm_int(value, default: int) -> int:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return default
+    return number if number > 0 else default

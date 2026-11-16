@@ -4,203 +4,1136 @@
 
 {% block page_styles %}
   <style>
-    .page-title {
-      margin: 0 0 16px;
-    }
-
-    .layout {
-      display: grid;
-      grid-template-columns: 1.1fr 0.9fr;
-      gap: 24px;
-    }
-
-    .panel {
-      border: 1px solid #dfe7f1;
-      border-radius: 10px;
-      padding: 16px;
-      background: #f9fbff;
-    }
-
-    form {
-      display: grid;
-      gap: 12px;
-    }
-
-    label {
-      display: grid;
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       gap: 6px;
-      font-weight: 600;
-    }
-
-    input,
-    select,
-    button {
-      padding: 8px 10px;
-      font-size: 14px;
-      border-radius: 6px;
-      border: 1px solid #cdd7e3;
-    }
-
-    button {
-      background: #2563eb;
+      min-height: 36px;
+      padding: 0 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid transparent;
+      background: var(--link);
       color: #fff;
+      font-family: inherit;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease,
+        box-shadow 0.16s ease;
+    }
+
+    .btn:hover { background: var(--link-strong); }
+
+    .btn.secondary {
+      background: #fff;
+      color: var(--text-soft);
+      border-color: var(--line-strong);
+    }
+
+    .btn.secondary:hover {
+      background: var(--surface-muted);
+      border-color: #c4cedc;
+    }
+
+    .btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .btn-sm {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 30px;
+      padding: 0 10px;
+      border-radius: 7px;
+      border: 1px solid var(--line-strong);
+      background: #fff;
+      color: var(--text-soft);
+      font-family: inherit;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+    }
+
+    .btn-sm:hover {
+      background: var(--surface-muted);
+      border-color: #c4cedc;
+      color: var(--text);
+    }
+
+    .btn-sm.is-danger {
+      color: var(--danger);
+      border-color: rgba(220, 38, 38, 0.24);
+    }
+
+    .btn-sm.is-danger:hover {
+      background: var(--danger-soft);
+      border-color: rgba(220, 38, 38, 0.4);
+    }
+
+    .btn-sm:disabled {
+      color: var(--muted-soft);
+      border-color: var(--line);
+      background: var(--surface-muted);
+      cursor: not-allowed;
+    }
+
+    .btn-link {
+      min-height: 30px;
+      padding: 0 6px;
       border: none;
+      background: transparent;
+      color: var(--link);
+      font-family: inherit;
+      font-size: 0.78rem;
+      font-weight: 600;
       cursor: pointer;
     }
 
-    button.secondary {
-      background: #0f766e;
+    .btn-link:hover {
+      color: var(--link-strong);
+      text-decoration: underline;
+    }
+
+    .btn-link.danger { color: var(--danger); }
+
+    .btn-link.danger:disabled {
+      color: var(--muted-soft);
+      cursor: not-allowed;
+      text-decoration: none;
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcfe;
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    }
+
+    .panel-head h2 {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 700;
+    }
+
+    .panel-count {
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border-radius: 0 0 var(--radius-lg) var(--radius-lg);
     }
 
     table {
       width: 100%;
+      min-width: 700px;
       border-collapse: collapse;
-      margin-top: 12px;
     }
 
     th,
     td {
-      border-bottom: 1px solid #e2e8f0;
-      padding: 8px 10px;
+      border-bottom: 1px solid var(--line);
+      padding: 12px 16px;
       text-align: left;
+      vertical-align: top;
     }
 
-    .endpoint-row {
-      display: grid;
-      grid-template-columns: 1.5fr 1fr;
+    th {
+      padding-top: 10px;
+      padding-bottom: 10px;
+      font-size: 0.74rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+      background: #fbfcfe;
+      white-space: nowrap;
+    }
+
+    tbody tr {
+      transition: background 0.16s ease;
+    }
+
+    tbody tr:hover {
+      background: #fbfdff;
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    td.col-name { width: 27%; }
+
+    .service-name-cell {
+      display: flex;
+      align-items: center;
       gap: 8px;
+      font-weight: 600;
+      font-size: 0.9rem;
     }
 
-    .muted {
+    .toggle-btn {
+      flex: none;
+      width: 24px;
+      height: 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      color: var(--muted);
+      cursor: pointer;
+      line-height: 1;
+      transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+    }
+
+    .toggle-btn:hover {
+      background: #eef2ff;
+      border-color: #dbe3ff;
+      color: var(--link);
+    }
+
+    .toggle-btn svg {
+      transition: transform 0.16s ease;
+    }
+
+    .toggle-btn[aria-expanded="true"] svg {
+      transform: rotate(90deg);
+    }
+
+    .toggle-placeholder {
+      flex: none;
+      width: 24px;
+    }
+
+    .child-count {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 9px;
+      border-radius: 999px;
+      background: var(--neutral-soft);
+      color: var(--text-soft);
+      font-size: 0.74rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .child-count.is-empty {
+      background: transparent;
+      color: var(--muted-soft);
+      padding: 0;
+      font-weight: 400;
+    }
+
+    .rule-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .rule-item {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .rule-main {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .rule-url {
+      flex: 0 1 auto;
+      min-width: 0;
+      max-width: calc(100% - 96px);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--text-soft);
+      background: var(--surface-muted);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 1px 7px;
+    }
+
+    .rule-chip {
+      flex: none;
+      padding: 1px 7px;
+      border-radius: 6px;
+      background: #eef2ff;
+      color: var(--link-strong);
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .alarm-line {
+      display: flex;
+      align-items: flex-start;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 0.74rem;
+      line-height: 1.5;
+    }
+
+    .alarm-line svg {
+      flex: none;
+      margin-top: 2px;
+    }
+
+    .alarm-line.is-off { color: var(--muted); }
+
+    .alarm-recipients {
+      color: var(--text-soft);
+      word-break: break-all;
+    }
+
+    .actions {
+      display: flex;
+      align-items: center;
+      flex-wrap: nowrap;
+      gap: 6px;
+    }
+
+    th:last-child,
+    td:last-child {
+      white-space: nowrap;
+    }
+
+    .muted { color: var(--muted); }
+
+    .small { font-size: 0.75rem; }
+
+    .empty-state {
+      padding: 40px 20px;
+    }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+    }
+
+    .modal[aria-hidden="true"] {
+      display: none;
+    }
+
+    .modal.is-open {
+      display: block;
+    }
+
+    .modal__overlay {
+      height: 100%;
+      padding: 28px 16px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      overflow-y: auto;
+      background: rgba(15, 23, 42, 0.48);
+    }
+
+    .modal__container {
+      width: 100%;
+      max-width: 720px;
+      margin: auto;
+      background: #fff;
+      border-radius: var(--radius-lg);
+      box-shadow: 0 30px 70px -20px rgba(15, 23, 42, 0.45);
+      overflow: hidden;
+    }
+
+    .modal__header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 18px 22px 16px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcfe;
+    }
+
+    .modal__title-group {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .modal__icon {
+      flex: none;
+      width: 34px;
+      height: 34px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+      background: #eef2ff;
+      color: var(--link);
+    }
+
+    .modal__title {
+      margin: 1px 0 0;
+      font-size: 1.02rem;
+      line-height: 1.4;
+    }
+
+    .modal__subtitle {
+      margin: 2px 0 0;
+      color: var(--muted);
+      font-size: 0.78rem;
+    }
+
+    .modal__close {
+      flex: none;
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      line-height: 1;
+      transition: background 0.16s ease, color 0.16s ease;
+    }
+
+    .modal__close::before {
+      content: '×';
+      font-size: 1.4rem;
+    }
+
+    .modal__close:hover {
+      background: var(--neutral-soft);
+      color: var(--text);
+    }
+
+    .modal__content {
+      padding: 20px 22px 22px;
+    }
+
+    form {
+      display: grid;
+      gap: 18px;
+    }
+
+    .form-section {
+      display: grid;
+      gap: 12px;
+    }
+
+    .form-section-title {
+      margin: 0;
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
       color: var(--muted);
     }
 
-    .small {
-      font-size: 12px;
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
     }
 
-    @media (max-width: 880px) {
-      .layout {
+    .field {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-soft);
+    }
+
+    .field-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .field .req {
+      color: var(--danger);
+      margin-left: 2px;
+    }
+
+    .field small {
+      font-weight: 400;
+      color: var(--muted-soft);
+      font-size: 0.72rem;
+    }
+
+    input,
+    select {
+      width: 100%;
+      min-height: 38px;
+      padding: 0 11px;
+      font-size: 0.86rem;
+      font-family: inherit;
+      color: var(--text);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--line-strong);
+      background: #fff;
+      transition: border-color 0.16s ease, box-shadow 0.16s ease;
+    }
+
+    input::placeholder { color: var(--muted-soft); }
+
+    input:focus,
+    select:focus {
+      outline: none;
+      border-color: var(--link);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+    }
+
+    .endpoint-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .endpoint-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fcfdff;
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .endpoint-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .endpoint-index {
+      font-size: 0.76rem;
+      font-weight: 700;
+      color: var(--text-soft);
+    }
+
+    .endpoint-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .span-2 { grid-column: 1 / -1; }
+
+    .checkline {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 38px;
+      padding: 0 2px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-soft);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .checkline input {
+      width: 15px;
+      height: 15px;
+      min-height: 0;
+      margin: 0;
+      padding: 0;
+      accent-color: var(--link);
+    }
+
+    .section-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .section-head .muted {
+      font-size: 0.74rem;
+    }
+
+    .modal__footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding-top: 16px;
+      border-top: 1px solid var(--line);
+    }
+
+    @media (max-width: 900px) {
+      th,
+      td {
+        padding-left: 14px;
+        padding-right: 14px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .page-head {
+        align-items: stretch;
+      }
+
+      .page-head .btn {
+        width: 100%;
+      }
+
+      .table-wrap {
+        overflow: visible;
+      }
+
+      table {
+        min-width: 0;
+      }
+
+      thead {
+        display: none;
+      }
+
+      tbody,
+      tr,
+      td {
+        display: block;
+      }
+
+      tbody tr {
+        padding: 16px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      tbody tr:last-child {
+        border-bottom: none;
+      }
+
+      td,
+      td.col-name {
+        width: auto;
+        border: none;
+        padding: 0;
+        margin-bottom: 10px;
+      }
+
+      td.is-empty {
+        display: none;
+      }
+
+      td:last-child {
+        margin-bottom: 0;
+        padding-top: 12px;
+        border-top: 1px dashed var(--line);
+      }
+
+      .form-grid,
+      .endpoint-grid {
         grid-template-columns: 1fr;
+      }
+
+      .modal__overlay {
+        padding: 12px;
+      }
+
+      .modal__content {
+        padding: 16px;
       }
     }
   </style>
 {% endblock %}
 
 {% block content %}
-  <h1 class="page-title">服务检测配置</h1>
-  <div class="layout">
-    <div class="panel">
-      <h2>新增服务</h2>
-      <form id="service-form">
-        <label>
-          服务名
-          <input name="name" placeholder="例如 gateway" required>
-        </label>
-
-        <label>
-          子服务
-          <select name="parent_id">
-            <option value="">无（根服务）</option>
-          </select>
-        </label>
-
-        <div>
-          <div class="muted small">检测配置</div>
-          <div id="endpoint-list"></div>
-        </div>
-
-        <button type="button" class="secondary" id="add-endpoint">添加检测 URL</button>
-        <button type="submit">保存</button>
-      </form>
+  <div class="page-head">
+    <div>
+      <h1>服务检测配置</h1>
+      <p class="page-subtitle">维护根服务与子服务，并为每项配置检测地址、成功规则与邮件报警。</p>
     </div>
+    <button type="button" class="btn" id="create-service">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
+        <line x1="12" y1="5" x2="12" y2="19"></line>
+        <line x1="5" y1="12" x2="19" y2="12"></line>
+      </svg>
+      新增服务
+    </button>
+  </div>
 
-    <div class="panel">
-      <h2>服务列表</h2>
+  <section class="panel">
+    <div class="panel-head">
+      <h2>服务配置列表</h2>
+      <span class="panel-count" id="service-count">加载中…</span>
+    </div>
+    <div class="table-wrap">
       <table>
         <thead>
           <tr>
             <th>服务名</th>
             <th>子服务</th>
-            <th>检测规则</th>
+            <th>检测规则 / 报警</th>
+            <th>操作</th>
           </tr>
         </thead>
         <tbody id="service-list"></tbody>
       </table>
     </div>
+  </section>
+
+  <div class="modal micromodal-slide" id="service-modal" aria-hidden="true">
+    <div class="modal__overlay" tabindex="-1" data-micromodal-close>
+      <div class="modal__container" role="dialog" aria-modal="true" aria-labelledby="service-modal-title">
+        <header class="modal__header">
+          <div class="modal__title-group">
+            <span class="modal__icon" aria-hidden="true">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 12h4l2.5-6 4 12 2.5-6H22"></path>
+              </svg>
+            </span>
+            <div>
+              <h2 class="modal__title" id="service-modal-title">新增服务</h2>
+              <p class="modal__subtitle">配置服务层级、检测地址与报警方式</p>
+            </div>
+          </div>
+          <button type="button" class="modal__close" aria-label="关闭" data-micromodal-close></button>
+        </header>
+        <div class="modal__content">
+          <form id="service-form">
+            <div class="form-section">
+              <h3 class="form-section-title">基本信息</h3>
+              <div class="form-grid">
+                <label class="field">
+                  <span class="field-label">服务名<span class="req">*</span></span>
+                  <input name="name" placeholder="例如 gateway" required>
+                </label>
+                <label class="field">
+                  父级服务
+                  <select name="parent_id">
+                    <option value="">无（根服务）</option>
+                  </select>
+                  <small>留空则该服务作为根服务展示</small>
+                </label>
+              </div>
+            </div>
+
+            <div class="form-section">
+              <div class="section-head">
+                <h3 class="form-section-title">检测项与报警</h3>
+                <span class="muted" id="endpoint-count">共 1 项</span>
+              </div>
+              <div id="endpoint-list" class="endpoint-list"></div>
+              <div>
+                <button type="button" class="btn secondary" id="add-endpoint">添加检测 URL</button>
+              </div>
+            </div>
+
+            <div class="modal__footer">
+              <button type="button" class="btn secondary" data-micromodal-close>取消</button>
+              <button type="submit" class="btn" id="submit-btn">保存</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
   </div>
 {% endblock %}
 
 {% block scripts %}
+  <script src="https://cdn.jsdelivr.net/npm/micromodal@0.4.10/dist/micromodal.min.js"></script>
   <script>
+    const MODAL_ID = 'service-modal';
+    const form = document.getElementById('service-form');
+    const formTitle = document.getElementById('service-modal-title');
     const endpointList = document.getElementById('endpoint-list');
+    const endpointCount = document.getElementById('endpoint-count');
     const serviceList = document.getElementById('service-list');
+    const serviceCount = document.getElementById('service-count');
+    const submitBtn = document.getElementById('submit-btn');
+    const createBtn = document.getElementById('create-service');
 
-    function createEndpointRow(url = '', rule = 'status==200') {
-      const row = document.createElement('div');
-      row.className = 'endpoint-row';
-      row.innerHTML = `
-        <input type="url" name="heartbeat_url" value="${url}" placeholder="https://example.com/health" required>
-        <select name="success_rule">
-          <option value="status==200" ${rule === 'status==200' ? 'selected' : ''}>status==200</option>
-          <option value="body_contains:OK" ${rule === 'body_contains:OK' ? 'selected' : ''}>body_contains:OK</option>
-          <option value="body_contains:ok" ${rule === 'body_contains:ok' ? 'selected' : ''}>body_contains:ok</option>
-        </select>
+    let servicesCache = [];
+    let editingServiceId = null;
+    const expandedServiceIds = new Set();
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
+    function alarmSummary(config) {
+      if (!config.alarm_enabled) return '报警: 关闭';
+      return `报警: ${config.alarm_channels || 'email'} · ${config.alarm_window_minutes}分钟内最多${config.alarm_max_per_window}次 · ${config.alarm_recipients || '未填写收件人'}`;
+    }
+
+    function alarmLineHtml(config) {
+      if (!config.alarm_enabled) {
+        return `
+          <div class="alarm-line is-off">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M13.7 21a2 2 0 0 1-3.4 0"></path>
+              <path d="M18 8a6 6 0 0 0-9.3-5"></path>
+              <path d="M6 8a6 6 0 0 0 9.3 9.3"></path>
+              <path d="M3 3l18 18"></path>
+            </svg>
+            邮件报警已关闭
+          </div>
+        `;
+      }
+      const channels = escapeHtml(config.alarm_channels || 'email');
+      const windowMinutes = escapeHtml(String(config.alarm_window_minutes ?? 10));
+      const maxPerWindow = escapeHtml(String(config.alarm_max_per_window ?? 1));
+      const recipients = escapeHtml(config.alarm_recipients || '未填写收件人');
+      return `
+        <div class="alarm-line">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+            <path d="M13.7 21a2 2 0 0 1-3.4 0"></path>
+          </svg>
+          <span>${channels} 报警 · ${windowMinutes} 分钟内最多 ${maxPerWindow} 次 · <span class="alarm-recipients">${recipients}</span></span>
+        </div>
       `;
+    }
+
+    function createEndpointRow(config = {}) {
+      const row = document.createElement('div');
+      row.className = 'endpoint-card';
+
+      const url = config.heartbeat_url || '';
+      const rule = config.success_rule || 'status==200';
+      const alarmEnabled = Boolean(config.alarm_enabled);
+      const recipients = config.alarm_recipients || '';
+      const windowMinutes = config.alarm_window_minutes || 10;
+      const maxPerWindow = config.alarm_max_per_window || 1;
+
+      const knownRules = ['status==200', 'body_contains:OK', 'body_contains:ok'];
+      const ruleOptions = knownRules
+        .map((item) => `<option value="${escapeHtml(item)}" ${rule === item ? 'selected' : ''}>${escapeHtml(item)}</option>`)
+        .join('');
+      const customRuleOption = knownRules.includes(rule)
+        ? ''
+        : `<option value="${escapeHtml(rule)}" selected>${escapeHtml(rule)}</option>`;
+
+      row.innerHTML = `
+        <div class="endpoint-head">
+          <span class="endpoint-index">检测项</span>
+          <button type="button" class="btn-link danger endpoint-remove">移除此项</button>
+        </div>
+        <div class="endpoint-grid">
+          <label class="field span-2">
+            <span class="field-label">检测 URL<span class="req">*</span></span>
+            <input type="url" name="heartbeat_url" value="${escapeHtml(url)}" placeholder="https://example.com/health" required>
+          </label>
+          <label class="field">
+            成功规则
+            <select name="success_rule">
+              ${ruleOptions}
+              ${customRuleOption}
+            </select>
+          </label>
+          <label class="checkline">
+            <input type="checkbox" name="alarm_enabled" ${alarmEnabled ? 'checked' : ''}>
+            开启邮件报警
+          </label>
+          <label class="field span-2">
+            收件邮箱
+            <input type="text" name="alarm_recipients" value="${escapeHtml(recipients)}" placeholder="ops@example.com，多个用逗号分隔">
+          </label>
+          <label class="field">
+            频控窗口（分钟）
+            <input type="number" name="alarm_window_minutes" min="1" value="${windowMinutes}">
+          </label>
+          <label class="field">
+            窗口内最多（次）
+            <input type="number" name="alarm_max_per_window" min="1" value="${maxPerWindow}">
+          </label>
+        </div>
+      `;
+
+      row.querySelector('.endpoint-remove').addEventListener('click', () => {
+        row.remove();
+        renumberEndpoints();
+      });
       return row;
     }
 
-    function addEndpoint(url = '', rule = 'status==200') {
-      endpointList.appendChild(createEndpointRow(url, rule));
+    function renumberEndpoints() {
+      const cards = [...endpointList.querySelectorAll('.endpoint-card')];
+      cards.forEach((card, index) => {
+        const label = card.querySelector('.endpoint-index');
+        if (label) label.textContent = `检测项 ${index + 1}`;
+      });
+      if (endpointCount) endpointCount.textContent = `共 ${cards.length} 项`;
     }
 
-    document.getElementById('add-endpoint').addEventListener('click', () => addEndpoint());
-    addEndpoint();
+    function addEndpoint(config = {}) {
+      endpointList.appendChild(createEndpointRow(config));
+      renumberEndpoints();
+    }
+
+    function collectDescendantIds(serviceId) {
+      const descendants = new Set();
+      const walk = (currentId) => {
+        const service = servicesCache.find((item) => item.id === currentId);
+        if (!service) return;
+        (service.child_service_ids || []).forEach((childId) => {
+          if (descendants.has(childId)) return;
+          descendants.add(childId);
+          walk(childId);
+        });
+      };
+      walk(serviceId);
+      return descendants;
+    }
+
+    function populateParentSelector(excludeId) {
+      const selector = form.elements.parent_id;
+      selector.innerHTML = '<option value="">无（根服务）</option>';
+      const excludedIds = excludeId ? collectDescendantIds(excludeId) : new Set();
+      if (excludeId) excludedIds.add(excludeId);
+
+      servicesCache.forEach((service) => {
+        if (excludedIds.has(service.id)) return;
+        const option = document.createElement('option');
+        option.value = service.id;
+        option.textContent = service.name;
+        selector.appendChild(option);
+      });
+    }
+
+    function resetFormState() {
+      editingServiceId = null;
+      form.reset();
+      formTitle.textContent = '新增服务';
+      submitBtn.textContent = '保存';
+      endpointList.innerHTML = '';
+      addEndpoint();
+      populateParentSelector(null);
+    }
+
+    function openCreateModal() {
+      resetFormState();
+      MicroModal.show(MODAL_ID);
+    }
+
+    function openEditModal(service) {
+      editingServiceId = service.id;
+      form.reset();
+      formTitle.textContent = `编辑服务：${service.name}`;
+      submitBtn.textContent = '更新';
+      form.elements.name.value = service.name;
+      populateParentSelector(service.id);
+      form.elements.parent_id.value = service.parent_id ? String(service.parent_id) : '';
+      endpointList.innerHTML = '';
+      const configs = service.heartbeat_configs && service.heartbeat_configs.length
+        ? service.heartbeat_configs
+        : [{}];
+      configs.forEach((config) => addEndpoint(config));
+      MicroModal.show(MODAL_ID);
+    }
+
+    function serviceRowHtml(service, depth) {
+      const childIds = service.child_service_ids || [];
+      const hasChildren = childIds.length > 0;
+      const expanded = expandedServiceIds.has(service.id);
+      const configs = service.heartbeat_configs || [];
+      const rules = configs.length
+        ? configs
+            .map(
+              (item) => `
+                <div class="rule-item">
+                  <div class="rule-main">
+                    <code class="rule-url" title="${escapeHtml(item.heartbeat_url)}">${escapeHtml(item.heartbeat_url)}</code>
+                    <span class="rule-chip">${escapeHtml(item.success_rule)}</span>
+                  </div>
+                  ${alarmLineHtml(item)}
+                </div>`
+            )
+            .join('')
+        : '<span class="muted small">尚未配置检测地址</span>';
+      const toggleCell = hasChildren
+        ? `<button type="button" class="toggle-btn" data-action="toggle" data-id="${service.id}" aria-expanded="${expanded}" aria-label="${expanded ? '收起子服务' : '展开子服务'}" title="${expanded ? '收起子服务' : '展开子服务'}">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+          </button>`
+        : '<span class="toggle-placeholder"></span>';
+      const deleteBtn = hasChildren
+        ? `<button type="button" class="btn-sm is-danger" data-action="delete" data-id="${service.id}" disabled title="请先删除子服务">删除</button>`
+        : `<button type="button" class="btn-sm is-danger" data-action="delete" data-id="${service.id}">删除</button>`;
+      const childCountHtml = hasChildren
+        ? `<span class="child-count">${childIds.length} 个子服务</span>`
+        : '<span class="child-count is-empty">—</span>';
+
+      return `
+        <tr>
+          <td class="col-name">
+            <div class="service-name-cell" style="padding-left: ${depth * 20}px">
+              ${toggleCell}
+              <span>${escapeHtml(service.name)}</span>
+            </div>
+          </td>
+          <td${hasChildren ? '' : ' class="is-empty"'}>${childCountHtml}</td>
+          <td><div class="rule-list">${rules}</div></td>
+          <td>
+            <div class="actions">
+              <button type="button" class="btn-sm" data-action="edit" data-id="${service.id}">编辑</button>
+              ${deleteBtn}
+            </div>
+          </td>
+        </tr>
+      `;
+    }
+
+    function appendServiceRows(parentId, depth, rows) {
+      const nodes = servicesCache
+        .filter((service) => (service.parent_id ?? null) === parentId)
+        .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+
+      nodes.forEach((service) => {
+        rows.push(serviceRowHtml(service, depth));
+        if (expandedServiceIds.has(service.id)) {
+          appendServiceRows(service.id, depth + 1, rows);
+        }
+      });
+    }
+
+    function renderServiceList() {
+      const rows = [];
+      appendServiceRows(null, 0, rows);
+      serviceList.innerHTML = rows.length
+        ? rows.join('')
+        : `
+          <tr>
+            <td colspan="4">
+              <div class="empty-state">
+                <strong>暂无服务</strong>
+                <span>点击右上角 “新增服务” 开始配置。</span>
+              </div>
+            </td>
+          </tr>`;
+      if (serviceCount) {
+        serviceCount.textContent = rows.length ? `共 ${servicesCache.length} 个服务` : '暂无服务';
+      }
+    }
 
     async function loadServices() {
       const res = await fetch('/api/services');
       const data = await res.json();
-      const services = data.services || [];
-      const parentSelector = document.querySelector('select[name="parent_id"]');
-      parentSelector.innerHTML = '<option value="">无（根服务）</option>';
-      services.forEach((service) => {
-        const option = document.createElement('option');
-        option.value = service.id;
-        option.textContent = service.name;
-        parentSelector.appendChild(option);
+      servicesCache = data.services || [];
+
+      const existingIds = new Set(servicesCache.map((service) => service.id));
+      [...expandedServiceIds].forEach((id) => {
+        if (!existingIds.has(id)) expandedServiceIds.delete(id);
       });
 
-      serviceList.innerHTML = '';
-      services.forEach((service) => {
-        const row = document.createElement('tr');
-        const parentName = service.parent_id ? services.find((item) => item.id === service.parent_id)?.name || '—' : '—';
-        const rules = (service.heartbeat_configs || []).map((item) => `${item.heartbeat_url} => ${item.success_rule}`).join('<br>') || '未配置';
-        row.innerHTML = `<td>${service.name}</td><td>${parentName}</td><td>${rules}</td>`;
-        serviceList.appendChild(row);
-      });
+      renderServiceList();
     }
 
-    document.getElementById('service-form').addEventListener('submit', async (event) => {
+    async function deleteService(service) {
+      if ((service.child_service_ids || []).length) {
+        alert('该服务包含子服务，请先删除子服务');
+        return;
+      }
+      if (!window.confirm(`确认删除服务「${service.name}」？其检测配置与历史检测/报警记录将一并删除。`)) {
+        return;
+      }
+
+      const response = await fetch(`/api/services/${service.id}`, {method: 'DELETE'});
+      if (!response.ok) {
+        const err = await response.text();
+        alert('删除失败: ' + err);
+        return;
+      }
+      expandedServiceIds.delete(service.id);
+      await loadServices();
+    }
+
+    serviceList.addEventListener('click', (event) => {
+      const button = event.target.closest('button[data-action]');
+      if (!button) return;
+      const service = servicesCache.find((item) => item.id === Number(button.dataset.id));
+      if (!service) return;
+
+      const action = button.dataset.action;
+      if (action === 'edit') {
+        openEditModal(service);
+        return;
+      }
+      if (action === 'delete') {
+        void deleteService(service);
+        return;
+      }
+      if (action === 'toggle') {
+        if (expandedServiceIds.has(service.id)) {
+          expandedServiceIds.delete(service.id);
+        } else {
+          expandedServiceIds.add(service.id);
+        }
+        renderServiceList();
+      }
+    });
+
+    createBtn.addEventListener('click', openCreateModal);
+    document.getElementById('add-endpoint').addEventListener('click', () => addEndpoint());
+
+    form.addEventListener('submit', async (event) => {
       event.preventDefault();
-      const form = event.currentTarget;
-      const rows = [...endpointList.querySelectorAll('.endpoint-row')];
+
+      const rows = [...endpointList.querySelectorAll('.endpoint-card')];
+      let missingRecipients = false;
       const heartbeat_configs = rows
         .map((row) => {
           const url = row.querySelector('input[name="heartbeat_url"]').value.trim();
-          const rule = row.querySelector('select[name="success_rule"]').value;
-          return url ? { heartbeat_url: url, success_rule: rule } : null;
+          if (!url) return null;
+          const alarmEnabled = row.querySelector('input[name="alarm_enabled"]').checked;
+          const recipients = row.querySelector('input[name="alarm_recipients"]').value.trim();
+          if (alarmEnabled && !recipients) {
+            missingRecipients = true;
+          }
+          return {
+            heartbeat_url: url,
+            success_rule: row.querySelector('select[name="success_rule"]').value,
+            alarm_enabled: alarmEnabled,
+            alarm_channels: 'email',
+            alarm_recipients: recipients,
+            alarm_window_minutes: Number(row.querySelector('input[name="alarm_window_minutes"]').value) || 10,
+            alarm_max_per_window: Number(row.querySelector('input[name="alarm_max_per_window"]').value) || 1,
+          };
         })
         .filter(Boolean);
+
+      if (missingRecipients) {
+        alert('开启报警时请填写收件邮箱');
+        return;
+      }
 
       const payload = {
         name: form.elements.name.value.trim(),
         parent_id: form.elements.parent_id.value ? Number(form.elements.parent_id.value) : null,
-        enabled: true,
         heartbeat_configs,
       };
+      if (!editingServiceId) {
+        payload.enabled = true;
+      }
 
-      const response = await fetch('/api/services', {
-        method: 'POST',
+      const url = editingServiceId ? `/api/services/${editingServiceId}` : '/api/services';
+      const method = editingServiceId ? 'PATCH' : 'POST';
+
+      const response = await fetch(url, {
+        method,
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(payload),
       });
@@ -209,12 +1142,17 @@
         alert('保存失败: ' + err);
         return;
       }
-      form.reset();
-      endpointList.innerHTML = '';
-      addEndpoint();
+
+      MicroModal.close(MODAL_ID);
       await loadServices();
     });
 
+    MicroModal.init({
+      disableScroll: true,
+      onClose: resetFormState,
+    });
+
+    resetFormState();
     loadServices();
   </script>
 {% endblock %}
