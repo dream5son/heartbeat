@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{{ service.name }} - {{ year }} failure calendar</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; }
+    table.year { border-collapse: collapse; }
+    td, th { border: 1px solid #d6d6d6; padding: 4px; text-align: center; }
+    .unhealthy { background-color: #ff7f7f; }
+  </style>
+</head>
+<body>
+  <h1>{{ service.name }} - {{ year }} failure calendar</h1>
+  <p>Red day = unhealthy. Click a day to view failure logs.</p>
+  {% for month in range(1, 13) %}
+    <h2>{{ year }}-{{ "%02d"|format(month) }}</h2>
+    <table>
+      <tr>
+        <th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th>
+      </tr>
+      {% for week in month_weeks[month] %}
+      <tr>
+        {% for day in week %}
+          {% if day == 0 %}
+            <td></td>
+          {% else %}
+            {% set day_iso = "%04d-%02d-%02d"|format(year, month, day) %}
+            <td class="{% if day_iso in unhealthy_days %}unhealthy{% endif %}">
+              <a href="/api/services/{{ service.id }}/failures?date={{ day_iso }}">{{ day }}</a>
+            </td>
+          {% endif %}
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </table>
+  {% endfor %}
+</body>
+</html>
