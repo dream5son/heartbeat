@@ -8,6 +8,9 @@ from typing import Any
 from .alarm import maybe_send_alarm, send_email_alarm
 from .logging_config import logger
 from .model import (
+    DAILY_STATUS_HEALTHY,
+    DAILY_STATUS_PARTIAL,
+    DAILY_STATUS_UNHEALTHY,
     DEFAULT_SUCCESS_RULE,
     AlarmRecord,
     DailyCheck,
@@ -73,6 +76,32 @@ def _get_or_create_daily(session: Any, service_id: int, check_date: dt.date) -> 
         daily = DailyCheck(service_id=service_id, date=check_date)
         session.add(daily)
     return daily
+
+
+PARTIAL_RATIO_THRESHOLD = 0.99
+
+
+def daily_status_from_minutes(daily: DailyCheck | None) -> int | None:
+    if daily is None:
+        return None
+
+    healthy = 0
+    unhealthy = 0
+    for minute_idx in range(24 * 60):
+        value = getattr(daily, f"minute_{minute_idx:04d}")
+        if value == 1:
+            healthy += 1
+        elif value == 0:
+            unhealthy += 1
+
+    checked = healthy + unhealthy
+    if checked == 0:
+        return None
+    if unhealthy == 0:
+        return DAILY_STATUS_HEALTHY
+    if healthy / checked > PARTIAL_RATIO_THRESHOLD:
+        return DAILY_STATUS_PARTIAL
+    return DAILY_STATUS_UNHEALTHY
 
 
 def _get_or_create_yearly(session: Any, service_id: int, year: int) -> YearlyCheck:
@@ -146,12 +175,10 @@ def perform_service_check(
     daily = _get_or_create_daily(session, service.id, check_time.date())
     setattr(daily, minute_col, 1 if service_ok else 0)
 
+    day_status = daily_status_from_minutes(daily)
     yearly = _get_or_create_yearly(session, service.id, check_time.year)
-    previous_day = getattr(yearly, day_col)
-    if service_ok and previous_day is None:
-        setattr(yearly, day_col, 1)
-    if not service_ok:
-        setattr(yearly, day_col, 0)
+    if day_status is not None:
+        setattr(yearly, day_col, day_status)
 
     if not service_ok:
         for ok, status_code, detail, heartbeat_url, success_rule in endpoint_results:
@@ -223,18 +250,7 @@ def run_health_checks(check_time: dt.datetime | None = None) -> None:
 
 
 def _daily_row_health(daily: DailyCheck | None) -> int | None:
-    if daily is None:
-        return None
-
-    saw_ok = False
-    for minute_idx in range(24 * 60):
-        value = getattr(daily, f"minute_{minute_idx:04d}")
-        if value == 0:
-            return 0
-        if value == 1:
-            saw_ok = True
-
-    return 1 if saw_ok else None
+    return daily_status_from_minutes(daily)
 
 
 def _daily_row_detail(daily: DailyCheck | None) -> dict[str, Any]:
@@ -272,9 +288,11 @@ def _daily_row_detail(daily: DailyCheck | None) -> dict[str, Any]:
 
 
 def _status_text(status_value: int | None) -> str:
-    if status_value == 1:
+    if status_value == DAILY_STATUS_HEALTHY:
         return "healthy"
-    if status_value == 0:
+    if status_value == DAILY_STATUS_PARTIAL:
+        return "partial"
+    if status_value == DAILY_STATUS_UNHEALTHY:
         return "unhealthy"
     return "unknown"
 
@@ -689,12 +707,16 @@ def service_status_calendar_data(
         .one_or_none()
     )
     unhealthy_days: set[str] = set()
+    partial_days: set[str] = set()
     if yearly is not None:
         month_days = calendar.monthrange(year, month)[1]
         for day in range(1, month_days + 1):
             value = getattr(yearly, f"day_{month:02d}{day:02d}")
-            if value == 0:
-                unhealthy_days.add(dt.date(year, month, day).isoformat())
+            day_iso = dt.date(year, month, day).isoformat()
+            if value == DAILY_STATUS_UNHEALTHY:
+                unhealthy_days.add(day_iso)
+            elif value == DAILY_STATUS_PARTIAL:
+                partial_days.add(day_iso)
 
     prev_year, prev_month = (year - 1, 12) if month == 1 else (year, month - 1)
     next_year, next_month = (year + 1, 1) if month == 12 else (year, month + 1)
@@ -704,6 +726,7 @@ def service_status_calendar_data(
         "month": month,
         "weeks": calendar.monthcalendar(year, month),
         "unhealthy_days": unhealthy_days,
+        "partial_days": partial_days,
         "prev_year": prev_year,
         "prev_month": prev_month,
         "next_year": next_year,

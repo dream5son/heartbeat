@@ -10,6 +10,7 @@ services:
       - "${HEARTBEAT_PORT:-5100}:5000"
     environment:
       HEARTBEAT_DB: sqlite:////data/heartbeat.db
+      TZ: "${TZ:-Asia/Shanghai}"
       PORT: "5000"
       START_SCHEDULER: "${START_SCHEDULER:-1}"
       LOG_DIR: "/app/logs"

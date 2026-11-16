@@ -1,9 +1,17 @@
 import os
+import time
 
 from dotenv import load_dotenv
 
 
 load_dotenv()
+
+# 所有时间统一按本地时区处理；默认东八区，可通过 HEARTBEAT_TZ 或 TZ 覆盖。
+TIMEZONE = os.getenv("HEARTBEAT_TZ") or os.getenv("TZ") or "Asia/Shanghai"
+if TIMEZONE:
+    os.environ["TZ"] = TIMEZONE
+    if hasattr(time, "tzset"):
+        time.tzset()
 
 DATABASE_URL = os.getenv("HEARTBEAT_DB", "sqlite:///heartbeat.db")
 PORT = int(os.getenv("PORT", "5000"))

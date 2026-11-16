@@ -131,6 +131,18 @@
       border-color: transparent;
     }
 
+    .day.partial {
+      background: linear-gradient(160deg, #fbbf24, #d97706);
+      color: #fff;
+      font-weight: 700;
+      box-shadow: 0 6px 14px -8px rgba(217, 119, 6, 0.85);
+    }
+
+    a.day.partial:hover {
+      background: linear-gradient(160deg, #f59e0b, #b45309);
+      border-color: transparent;
+    }
+
     .day.today {
       border-color: var(--link);
       box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
@@ -139,6 +151,11 @@
     .day.unhealthy.today {
       border-color: #fff;
       box-shadow: 0 0 0 2px rgba(225, 29, 72, 0.35);
+    }
+
+    .day.partial.today {
+      border-color: #fff;
+      box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.35);
     }
 
     @media (max-width: 560px) {
@@ -199,7 +216,7 @@
       </a>
     </div>
 
-    <p class="calendar-hint">红色日期表示当天不健康，点击日期可查看失败日志。</p>
+    <p class="calendar-hint">红色日期表示当天失败，黄色日期表示部分失败（失败分钟占比不足 1%），点击日期可查看失败日志。</p>
 
     <div class="calendar-grid">
       <div class="weekday">日</div>
@@ -217,7 +234,7 @@
           {% else %}
             {% set day_iso = "%04d-%02d-%02d"|format(year, month, day) %}
             <a
-              class="day{% if day_iso in unhealthy_days %} unhealthy{% endif %}{% if day_iso == today %} today{% endif %}"
+              class="day{% if day_iso in unhealthy_days %} unhealthy{% elif day_iso in partial_days %} partial{% endif %}{% if day_iso == today %} today{% endif %}"
               href="/services/{{ service.id }}/failures?date={{ day_iso }}"
               title="{{ day_iso }}"
             >{{ day }}</a>

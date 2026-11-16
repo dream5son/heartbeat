@@ -159,6 +159,54 @@ class HeartbeatTests(unittest.TestCase):
 
         session.close()
 
+    def test_daily_status_uses_healthy_minute_ratio(self) -> None:
+        session = hb.SessionLocal()
+        service = hb.Service(name="daily-ratio")
+        service.endpoints.append(hb.ServiceEndpoint(heartbeat_url="http://example/health"))
+        session.add(service)
+        session.commit()
+        session.refresh(service)
+
+        def ok_checker(_: str) -> tuple[bool, int, str, str]:
+            return True, 200, "status=200", "OK"
+
+        # 100 healthy + 1 failed, then another healthy minute: 101/102 ≈ 99.02% -> partial
+        partial_day = dt.date(2026, 1, 2)
+        partial_daily = hb.DailyCheck(service_id=service.id, date=partial_day)
+        for minute_idx in range(100):
+            setattr(partial_daily, f"minute_{minute_idx:04d}", 1)
+        setattr(partial_daily, "minute_0100", 0)
+        session.add(partial_daily)
+
+        # 1 healthy + 2 failed, then one healthy minute: 50% -> failure
+        failed_day = dt.date(2026, 1, 3)
+        failed_daily = hb.DailyCheck(service_id=service.id, date=failed_day)
+        setattr(failed_daily, "minute_0000", 1)
+        setattr(failed_daily, "minute_0001", 0)
+        setattr(failed_daily, "minute_0002", 0)
+        session.add(failed_daily)
+        session.flush()
+
+        hb.perform_service_check(
+            session, service, dt.datetime(2026, 1, 2, 1, 41), checker=ok_checker
+        )
+        session.flush()
+        hb.perform_service_check(
+            session, service, dt.datetime(2026, 1, 3, 0, 3), checker=ok_checker
+        )
+        session.flush()
+        hb.perform_service_check(
+            session, service, dt.datetime(2026, 1, 4, 0, 0), checker=ok_checker
+        )
+        session.flush()
+        session.commit()
+
+        yearly = session.query(hb.YearlyCheck).filter_by(service_id=service.id, year=2026).one()
+        self.assertEqual(getattr(yearly, "day_0102"), 2)
+        self.assertEqual(getattr(yearly, "day_0103"), 0)
+        self.assertEqual(getattr(yearly, "day_0104"), 1)
+        session.close()
+
     def test_homepage_and_status_tree_with_failure_hint(self) -> None:
         session = hb.SessionLocal()
         root = hb.Service(name="gateway")
@@ -573,7 +621,7 @@ class HeartbeatTests(unittest.TestCase):
         session.add(service)
         session.commit()
         session.refresh(service)
-        session.add(hb.YearlyCheck(service_id=service.id, year=2026, day_0101=0))
+        session.add(hb.YearlyCheck(service_id=service.id, year=2026, day_0101=0, day_0105=2))
         session.commit()
         service_id = service.id
         session.close()
@@ -583,6 +631,7 @@ class HeartbeatTests(unittest.TestCase):
         self.assertEqual(page_resp.status_code, 200)
         body = page_resp.get_data(as_text=True)
         self.assertIn("unhealthy", body)
+        self.assertIn("partial", body)
         self.assertIn(f"/services/{service_id}/failures?date=2026-01-01", body)
 
         missing_resp = client.get("/services/9999/service-status-calendar?year=2026")

@@ -223,4 +223,4 @@ HEARTBEAT_PORT=8080 START_SCHEDULER=0 docker compose -f deploy/docker-compose.ym
 - 当前默认数据库为 SQLite，适合单实例部署；如需多副本或高并发写入，请切换到 PostgreSQL 并补充驱动依赖。
 - 关闭内置调度器（`START_SCHEDULER=0`）后，需要由外部定时任务调用 `POST /api/check-now` 才会产生检查数据。
 - 模板目录位于仓库根级 `templates/`，应用通过包内相对路径 `../templates` 查找；部署时需保留源码目录结构（Docker 镜像已按此方式构建）。
-- 检查结果使用服务器本地时间写入对应分钟/日期字段，请确保容器时区符合预期。
+- 检查结果使用本地时区（默认 `Asia/Shanghai`，可通过 `HEARTBEAT_TZ` 或 `TZ` 覆盖）写入分钟/日期字段并展示时间。

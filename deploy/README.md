@@ -92,7 +92,7 @@ docker compose -f deploy/docker-compose.yml start heartbeat
 - 进程管理：`gunicorn` + `gthread`，默认 `1 worker × 4 threads`，入口 `heartbeat.app:app`。
 - 巡检调度器：在 gunicorn master 的 `when_ready` 钩子中只启动一份，多 worker 也不会重复巡检。
 - 健康检查：镜像内置 `HEALTHCHECK` 与 compose `healthcheck`，使用 Python 标准库请求 `http://127.0.0.1:5000/`，无需额外安装 curl。
-- 时区：巡检按服务器本地时间写入分钟/日期字段，如与预期不符，请在 compose 中为服务补充 `TZ` 环境变量或挂载 `/etc/localtime`。
+- 时区：巡检按本地时区（默认 `Asia/Shanghai`，可通过 compose 的 `TZ` 或 `HEARTBEAT_TZ` 覆盖）写入分钟/日期字段并展示时间。
 
 ## 常见问题
 
