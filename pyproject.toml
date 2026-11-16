@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "heartbeat"
+version = "0.1.0"
+description = "heartbeat for website health"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "Flask>=3.0.0",
+    "SQLAlchemy>=2.0.0",
+    "schedule>=1.2.0",
+    "python-dotenv>=1.0.1",
+]
+
+[tool.setuptools]
+packages = ["heartbeat"]
+py-modules = ["app", "model", "service", "router"]

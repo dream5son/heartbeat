@@ -7,7 +7,7 @@ heartbeat for website health
    ```bash
    python -m venv .venv
    . .venv/bin/activate
-   python -m pip install -r requirements.txt
+   python -m pip install -e .
    ```
 2. Copy the example environment file:
    ```bash
@@ -18,6 +18,11 @@ heartbeat for website health
    ```bash
    python app.py
    ```
+
+## Web routes
+
+- `/`: 状态首页（展示根服务及其子服务的健康状态，并显示最近失败提示）
+- `/config`: 服务检测配置页
 
 ## Configuration
 

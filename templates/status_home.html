@@ -1,0 +1,856 @@
+{% extends "layout.html" %}
+
+{% block title %}服务状态{% endblock %}
+
+{% block page_styles %}
+    <style>
+      :root {
+        --bg: #f6f7fb;
+        --card: #ffffff;
+        --muted: #64748b;
+        --line: rgba(148, 163, 184, 0.22);
+        --text: #0f172a;
+        --green: #22c55e;
+        --green-soft: #dcfce7;
+        --yellow: #fbbf24;
+        --orange: #f97316;
+        --red: #ef4444;
+        --red-soft: #fee2e2;
+        --slate: #dbe2ea;
+        --shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+      }
+
+      .container {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 28px 16px 64px;
+      }
+
+      .summary-card {
+        border-radius: 16px;
+        border: 1px solid rgba(34, 197, 94, 0.2);
+        background: linear-gradient(180deg, #ecfdf5 0%, #f0fdf4 100%);
+        box-shadow: var(--shadow);
+        padding: 16px 18px;
+        margin-bottom: 18px;
+      }
+
+      .summary-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .summary-dot {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--green);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 11px;
+        font-weight: 700;
+        box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.18);
+      }
+
+      .summary-title {
+        font-size: 1.02rem;
+        font-weight: 700;
+        margin: 0;
+      }
+
+      .summary-subtitle {
+        margin: 8px 0 0 26px;
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      .summary-recent {
+        margin-top: 12px;
+        padding-top: 10px;
+        border-top: 1px dashed rgba(148, 163, 184, 0.35);
+      }
+
+      .summary-recent-title {
+        margin: 0 0 6px;
+        color: var(--muted);
+        font-size: 0.78rem;
+      }
+
+      .status-panel {
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 18px;
+        overflow: hidden;
+        box-shadow: var(--shadow);
+      }
+
+      .panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 16px 12px;
+        border-bottom: 1px solid var(--line);
+        background: rgba(248, 250, 252, 0.8);
+      }
+
+      .panel-title {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 700;
+      }
+
+      .range-picker {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 0.83rem;
+      }
+
+      .range-btn {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--muted);
+        font-size: 1rem;
+        cursor: default;
+      }
+
+      .range-btn[disabled] {
+        opacity: 0.45;
+      }
+
+      .status-stack {
+        display: grid;
+        gap: 0;
+      }
+
+      .service-card {
+        padding: 14px 16px 12px;
+        border-bottom: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.45);
+      }
+
+      .service-card:last-child { border-bottom: none; }
+
+      .service-row {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .service-meta {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+        flex: 1;
+      }
+
+      .service-name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-weight: 700;
+        font-size: 0.95rem;
+      }
+
+      .service-name a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .service-name a:hover { text-decoration: underline; }
+
+      .service-info {
+        width: 18px;
+        height: 18px;
+        border-radius: 6px;
+        border: 1px solid rgba(148, 163, 184, 0.6);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--muted);
+        font-size: 0.7rem;
+        font-weight: 700;
+        background: rgba(255,255,255,0.8);
+      }
+
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border-radius: 999px;
+        padding: 4px 12px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: white;
+        letter-spacing: 0.02em;
+      }
+
+      .status-badge.healthy { background: var(--green); }
+      .status-badge.unhealthy { background: var(--red); }
+      .status-badge.partial { background: #fbbf24; color: #1f2937; }
+      .status-badge.partial::before { background: rgba(31, 41, 55, 0.8); }
+      .status-badge.unknown { background: #64748b; }
+
+      .status-badge::before {
+        content: '';
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.9);
+      }
+
+      .subrow {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-top: 8px;
+      }
+
+      .meta-text {
+        color: var(--muted);
+        font-size: 0.78rem;
+      }
+
+      .availability {
+        font-size: 0.82rem;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+
+      .timeline {
+        margin-top: 10px;
+        width: 100%;
+        min-height: 18px;
+        display: block;
+        position: relative;
+        overflow-x: auto;
+        overflow-y: hidden;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+      }
+
+      .timeline::-webkit-scrollbar {
+        display: none;
+        width: 0;
+        height: 0;
+      }
+
+      .timeline svg {
+        display: block;
+      }
+
+      .timeline rect {
+        transition: fill 0.2s ease;
+      }
+
+      .timeline rect:hover {
+        filter: brightness(0.88);
+      }
+
+      .timeline-tooltip {
+        position: fixed;
+        pointer-events: none;
+        z-index: 20;
+        background: rgba(15, 23, 42, 0.92);
+        color: #f8fafc;
+        padding: 6px 8px;
+        border-radius: 8px;
+        font-size: 0.74rem;
+        line-height: 1.4;
+        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.24);
+        max-width: 280px;
+        opacity: 0;
+        transform: translateY(4px);
+        transition: opacity 0.12s ease, transform 0.12s ease;
+      }
+
+      .timeline-tooltip.visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .children-block {
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px dashed rgba(148, 163, 184, 0.35);
+        display: grid;
+        gap: 10px;
+      }
+
+      .child-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 6px 0;
+      }
+
+      .child-name {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+        flex: 1;
+      }
+
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+      }
+
+      .dot.healthy { background: var(--green); }
+      .dot.unhealthy { background: var(--red); }
+      .dot.partial { background: #fbbf24; }
+      .dot.unknown { background: #94a3b8; }
+
+      .child-name-text {
+        font-size: 0.82rem;
+        line-height: 1.4;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: #1e293b;
+      }
+
+      .child-hint {
+        font-size: 0.78rem;
+        color: var(--muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .empty-state {
+        padding: 22px 18px;
+        color: var(--muted);
+        background: rgba(255,255,255,0.55);
+        border: 1px dashed rgba(148, 163, 184, 0.5);
+        border-radius: 12px;
+      }
+
+      @media (max-width: 640px) {
+        .subrow { align-items: flex-start; flex-direction: column; }
+        .availability { white-space: normal; }
+      }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div class="container">
+      <div id="summary" class="summary-card" aria-live="polite"></div>
+      <div id="meta" class="meta-text" style="margin: 0 0 12px;">加载中…</div>
+      <section class="status-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">系统状态</h2>
+          <div class="range-picker">
+            <button id="range-prev-btn" class="range-btn" type="button">‹</button>
+            <span id="range-text">最近3个月</span>
+            <button id="range-next-btn" class="range-btn" type="button">›</button>
+          </div>
+        </div>
+        <div id="roots" class="status-stack"></div>
+      </section>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    <script>
+      const rootsEl = document.getElementById('roots');
+      const metaEl = document.getElementById('meta');
+      const summaryEl = document.getElementById('summary');
+      const rangeTextEl = document.getElementById('range-text');
+      const rangePrevBtnEl = document.getElementById('range-prev-btn');
+      const rangeNextBtnEl = document.getElementById('range-next-btn');
+
+      const RANGE_WINDOW_DAYS = 128;
+      const DAY_MS = 24 * 60 * 60 * 1000;
+
+      const STATUS_META = {
+        healthy: { label: '健康', className: 'healthy' },
+        unhealthy: { label: '异常', className: 'unhealthy' },
+        partial: { label: '部分异常', className: 'partial' },
+        unknown: { label: '未知', className: 'unknown' }
+      };
+
+      function statusClass(status) {
+        return STATUS_META[status]?.className || 'unknown';
+      }
+
+      function statusText(status) {
+        return STATUS_META[status]?.label || '未知';
+      }
+
+      function resolveNodeState(node) {
+        const children = Array.isArray(node?.children) ? node.children : [];
+        if (!children.length) {
+          return node?.status || 'unknown';
+        }
+
+        const childStates = children.map((child) => child?.status || 'unknown');
+        if (childStates.every((state) => state === 'healthy')) {
+          return 'healthy';
+        }
+        if (childStates.every((state) => state === 'unknown')) {
+          return 'unknown';
+        }
+        if (childStates.some((state) => state === 'unhealthy') && childStates.some((state) => state === 'healthy')) {
+          return 'partial';
+        }
+        if (childStates.some((state) => state === 'unhealthy')) {
+          return 'unhealthy';
+        }
+        return 'unknown';
+      }
+
+      function statusDot(status) {
+        return `<span class="dot ${statusClass(status)}"></span>`;
+      }
+
+      function failureHintText(hint) {
+        if (!hint) return '最近失败：暂无';
+        return `最近失败：${hint.check_time} · ${hint.summary}`;
+      }
+
+      function normalizeDate(date) {
+        return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      }
+
+      function addDays(date, offset) {
+        const next = new Date(date);
+        next.setDate(next.getDate() + offset);
+        return normalizeDate(next);
+      }
+
+      function formatDate(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+
+      function dayDiff(start, end) {
+        return Math.floor((normalizeDate(end).getTime() - normalizeDate(start).getTime()) / DAY_MS);
+      }
+
+      function getToday() {
+        return normalizeDate(new Date());
+      }
+
+      let rangeEndDate = getToday();
+      let rangeStartDate = addDays(rangeEndDate, -(RANGE_WINDOW_DAYS - 1));
+
+      function updateRangeButtons() {
+        if (!rangePrevBtnEl || !rangeNextBtnEl) return;
+        rangePrevBtnEl.disabled = false;
+        rangeNextBtnEl.disabled = rangeEndDate.getTime() >= getToday().getTime();
+      }
+
+      function refreshRangeText() {
+        if (!rangeTextEl) return;
+        rangeTextEl.textContent = `${formatDate(rangeStartDate)} - ${formatDate(rangeEndDate)}`;
+        updateRangeButtons();
+      }
+
+      function shiftRangeByWindow(step) {
+        const offset = RANGE_WINDOW_DAYS * step;
+        if (step > 0) {
+          const maxForwardDays = dayDiff(rangeEndDate, getToday());
+          if (maxForwardDays <= 0) {
+            return false;
+          }
+          const forwardDays = Math.min(offset, maxForwardDays);
+          rangeStartDate = addDays(rangeStartDate, forwardDays);
+          rangeEndDate = addDays(rangeEndDate, forwardDays);
+          return true;
+        }
+
+        rangeStartDate = addDays(rangeStartDate, offset);
+        rangeEndDate = addDays(rangeEndDate, offset);
+        return true;
+      }
+
+      function initRangePicker() {
+        if (!rangePrevBtnEl || !rangeNextBtnEl) return;
+
+        rangePrevBtnEl.addEventListener('click', () => {
+          if (!shiftRangeByWindow(-1)) return;
+          refreshRangeText();
+          void loadStatus();
+        });
+
+        rangeNextBtnEl.addEventListener('click', () => {
+          if (!shiftRangeByWindow(1)) return;
+          refreshRangeText();
+          void loadStatus();
+        });
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll('&', '&amp;')
+          .replaceAll('<', '&lt;')
+          .replaceAll('>', '&gt;')
+          .replaceAll('"', '&quot;')
+          .replaceAll("'", '&#39;');
+      }
+
+      function renderTimeline(statuses, options) {
+        const palette = {
+          healthy: '#22c55e',
+          unhealthy: '#ef4444',
+          partial: '#fbbf24',
+          unknown: '#94a3b8'
+        };
+        const cells = Array.isArray(statuses) ? statuses : [];
+        const displayCells = cells.length ? cells : Array(options.defaultCount).fill('unknown');
+        const width = displayCells.length * options.cellWidth + Math.max(0, displayCells.length - 1) * options.gap;
+
+        const rects = displayCells.map((item, index) => {
+          const status = typeof item === 'string' ? item : item.status;
+          const color = palette[status] || palette.unknown;
+          const x = index * (options.cellWidth + options.gap);
+          const attrs = options.tooltipText ? (() => {
+            const text = options.tooltipText(item, index);
+            return text ? ` data-tooltip="${escapeHtml(text)}"` : '';
+          })() : '';
+          return `<rect x="${x}" y="0" width="${options.cellWidth}" height="${options.height}" fill="${color}" opacity="${status === 'healthy' ? 0.92 : 1}"${attrs}></rect>`;
+        }).join('');
+
+        return `
+          <svg class="${options.className}" width="${width}" height="${options.height}" viewBox="0 0 ${width} ${options.height}" aria-label="${options.ariaLabel}">
+            ${rects}
+          </svg>
+        `;
+      }
+
+      function dailyTooltipText(item) {
+        if (!item || !item.date) return '';
+        if (item.status === 'healthy') {
+          return `${item.date}：系统状态正常`;
+        }
+        if (item.status === 'unknown') {
+          return `${item.date}：暂无检测数据`;
+        }
+
+        const healthyCount = Number(item.healthy_count || 0);
+        const unhealthyCount = Number(item.unhealthy_count || 0);
+        const unknownCount = Number(item.unknown_count || 0);
+
+        if (unhealthyCount > 0 && healthyCount === 0 && unknownCount === 0) {
+          return `${item.date}：所有时段不可用`;
+        }
+        if (unhealthyCount > 0) {
+          const times = Array.isArray(item.failure_times) ? item.failure_times.slice(0, 12) : [];
+          const suffix = Array.isArray(item.failure_times) && item.failure_times.length > 12 ? '…' : '';
+          const text = times.length ? `${times.map((t) => `${t}失败`).join('，')}${suffix}` : '部分时段失败';
+          return `${item.date}：${text}`;
+        }
+        return `${item.date}：系统状态正常`;
+      }
+
+      function renderDailyTimeline(days) {
+        return renderTimeline(days, {
+          className: 'daily-timeline',
+          ariaLabel: `${formatDate(rangeStartDate)} 至 ${formatDate(rangeEndDate)} 按天趋势`,
+          defaultCount: RANGE_WINDOW_DAYS,
+          cellWidth: 5,
+          gap: 2,
+          height: 20,
+          tooltipText: dailyTooltipText
+        });
+      }
+
+      function renderRecentHoursTimeline(statuses) {
+        return renderTimeline(statuses, {
+          className: 'recent-hours-timeline',
+          ariaLabel: '最近3小时趋势',
+          defaultCount: 180,
+          cellWidth: 4,
+          gap: 1,
+          height: 12
+        });
+      }
+
+      function renderServiceSummary(node) {
+        const service = node.service || {};
+        const calendarLink = `/services/${service.id}/failure-calendar`;
+        const status = resolveNodeState(node);
+        return `
+          <div class="service-row">
+            <div class="service-meta">
+              <span class="service-info" title="查看失败日历">i</span>
+              <div class="service-name"><a href="${calendarLink}">${service.name || '未命名服务'}</a></div>
+            </div>
+            <span class="status-badge ${statusClass(status)}">${statusText(status)}</span>
+          </div>
+          <div class="subrow">
+            <div class="meta-text">服务状态：${statusText(status)}</div>
+            <div class="availability">${node.failure_hint ? '最近失败' : '无最近失败'}</div>
+          </div>
+          <div class="meta-text" style="margin-top: 4px;">最近检测：${node.last_check_time || '暂无'}</div>
+          <div class="meta-text" style="margin-top: 4px;">${failureHintText(node.failure_hint)}</div>
+          <div class="timeline">${renderDailyTimeline(node._daily || [])}</div>
+        `;
+      }
+
+      function renderChildRow(child) {
+        const service = child.service || {};
+        const status = child.status || 'unknown';
+        const calendarLink = `/services/${service.id}/failure-calendar`;
+        return `
+          <div class="child-row">
+            <div class="child-name">
+              ${statusDot(status)}
+              <span class="child-name-text"><a class="link" href="${calendarLink}">${service.name || '未命名服务'}</a></span>
+            </div>
+            <span class="status-badge ${statusClass(status)}">${statusText(status)}</span>
+          </div>
+          <div class="child-hint">${child.failure_hint ? failureHintText(child.failure_hint) : '暂无最近失败记录'}</div>
+        `;
+      }
+
+      function renderRootCard(root) {
+        const children = root.children || [];
+        return `
+          <article class="service-card">
+            ${renderServiceSummary(root)}
+            <div class="children-block">
+              ${children.length ? children.map(renderChildRow).join('') : '<div class="meta-text">暂无子服务</div>'}
+            </div>
+          </article>
+        `;
+      }
+
+      function mergeStatuses(statuses) {
+        if (!statuses.length) return 'unknown';
+        if (statuses.every((status) => status === 'healthy')) return 'healthy';
+        if (statuses.every((status) => status === 'unknown')) return 'unknown';
+        if (statuses.some((status) => status === 'unhealthy') && statuses.some((status) => status === 'healthy')) {
+          return 'partial';
+        }
+        if (statuses.some((status) => status === 'unhealthy')) return 'unhealthy';
+        return 'unknown';
+      }
+
+      function buildSummaryRecentHours(roots) {
+        const series = roots.map((root) => Array.isArray(root._recentHours) ? root._recentHours : []);
+        if (!series.length) return Array(180).fill('unknown');
+
+        const maxLength = Math.max(...series.map((item) => item.length), 0);
+        if (!maxLength) return Array(180).fill('unknown');
+
+        const merged = [];
+        for (let index = 0; index < maxLength; index += 1) {
+          const stepStates = series.map((item) => item[index] || 'unknown');
+          merged.push(mergeStatuses(stepStates));
+        }
+        return merged;
+      }
+
+      function renderSummary(roots) {
+        if (!roots.length) {
+          summaryEl.innerHTML = `
+            <div class="summary-row">
+              <span class="summary-dot">!</span>
+              <h3 class="summary-title">暂无监控数据</h3>
+            </div>
+            <p class="summary-subtitle">请先到“管理配置”中新增根服务与子服务。</p>
+          `;
+          return;
+        }
+
+        const states = roots.map((item) => resolveNodeState(item));
+        const allHealthy = states.every((state) => state === 'healthy');
+        const hasPartial = states.some((state) => state === 'partial');
+        const hasUnhealthy = states.some((state) => state === 'unhealthy');
+        const hasUnknown = states.some((state) => state === 'unknown');
+
+        let title = '一切运行正常';
+        let detail = '所有系统均按预期运行。';
+        let dot = '✓';
+        let dotColor = 'var(--green)';
+
+        if (hasPartial) {
+          title = '部分服务异常';
+          detail = '部分服务正常，部分子服务当前存在异常。';
+          dot = '!';
+          dotColor = '#fbbf24';
+        } else if (hasUnhealthy) {
+          title = '存在异常服务';
+          detail = '请关注异常服务并尽快排查。';
+          dot = '!';
+          dotColor = 'var(--red)';
+        } else if (hasUnknown) {
+          title = '部分服务待确认';
+          detail = '部分系统状态尚未确认，请稍后再试。';
+          dot = '?';
+          dotColor = '#64748b';
+        }
+
+        if (!allHealthy && !hasPartial && !hasUnhealthy && !hasUnknown) {
+          title = '暂无监控数据';
+          detail = '当前没有可用的服务状态数据。';
+          dot = '!';
+          dotColor = '#64748b';
+        }
+
+        const recentHours = buildSummaryRecentHours(roots);
+        summaryEl.innerHTML = `
+          <div class="summary-row">
+            <span class="summary-dot" style="background: ${dotColor}; box-shadow: 0 0 0 4px ${dotColor}22;">${dot}</span>
+            <h3 class="summary-title">${title}</h3>
+          </div>
+          <p class="summary-subtitle">${detail}</p>
+          <div class="summary-recent">
+            <p class="summary-recent-title">最近3小时状态</p>
+            <div class="timeline">${renderRecentHoursTimeline(recentHours)}</div>
+          </div>
+        `;
+      }
+
+      function renderRoots(roots) {
+        rootsEl.innerHTML = '';
+        if (!roots.length) {
+          rootsEl.innerHTML = '<div class="empty-state">暂无服务，请先到“管理配置”新增根服务与子服务。</div>';
+          return;
+        }
+        rootsEl.innerHTML = roots.map(renderRootCard).join('');
+      }
+
+      function scrollTimelinesToLatest() {
+        window.requestAnimationFrame(() => {
+          document.querySelectorAll('.timeline').forEach((timeline) => {
+            if (!(timeline instanceof HTMLElement)) return;
+            timeline.scrollLeft = timeline.scrollWidth;
+          });
+        });
+      }
+
+      async function fetchRecentHours(serviceId, hours = 3) {
+        const res = await fetch(`/api/services/${serviceId}/status/recent-hours?hours=${hours}`);
+        if (!res.ok) {
+          return Array(hours * 60).fill('unknown');
+        }
+        const data = await res.json();
+        const statuses = Array.isArray(data.status) ? data.status : [];
+        return statuses.length ? statuses : Array(hours * 60).fill('unknown');
+      }
+
+      async function fetchRecentDailyDetail(serviceId, startDate, endDate) {
+        const query = new URLSearchParams({
+          start_date: formatDate(startDate),
+          end_date: formatDate(endDate),
+        });
+        const res = await fetch(`/api/services/${serviceId}/status/recent-daily-detail?${query.toString()}`);
+        if (!res.ok) {
+          return [];
+        }
+        const data = await res.json();
+        return Array.isArray(data.days) ? data.days : [];
+      }
+
+      let tooltipEl = null;
+
+      function ensureTooltip() {
+        if (tooltipEl) return tooltipEl;
+        tooltipEl = document.createElement('div');
+        tooltipEl.className = 'timeline-tooltip';
+        document.body.appendChild(tooltipEl);
+        return tooltipEl;
+      }
+
+      function hideTooltip() {
+        const tip = ensureTooltip();
+        tip.classList.remove('visible');
+      }
+
+      function showTooltip(content, x, y) {
+        const tip = ensureTooltip();
+        tip.textContent = content;
+        tip.style.left = `${x + 12}px`;
+        tip.style.top = `${y + 12}px`;
+        tip.classList.add('visible');
+      }
+
+      function bindTimelineTooltip() {
+        document.addEventListener('pointermove', (event) => {
+          const target = event.target instanceof Element ? event.target.closest('rect[data-tooltip]') : null;
+          if (!target) {
+            hideTooltip();
+            return;
+          }
+          const tooltip = target.getAttribute('data-tooltip');
+          if (!tooltip) {
+            hideTooltip();
+            return;
+          }
+          showTooltip(tooltip, event.clientX, event.clientY);
+        });
+
+        document.addEventListener('pointerout', (event) => {
+          if (!(event.relatedTarget instanceof Element)) {
+            hideTooltip();
+          }
+        });
+      }
+
+      async function loadStatus() {
+        const res = await fetch('/api/status-tree');
+        if (!res.ok) {
+          metaEl.textContent = '加载失败';
+          summaryEl.innerHTML = `
+            <div class="summary-row">
+              <span class="summary-dot" style="background: var(--red); box-shadow: 0 0 0 4px rgba(239,68,68,0.15);">!</span>
+              <h3 class="summary-title">状态加载失败</h3>
+            </div>
+            <p class="summary-subtitle">请刷新页面或检查后端状态。</p>
+          `;
+          return;
+        }
+
+        const data = await res.json();
+        const roots = data.roots || [];
+        metaEl.textContent = `最近刷新：${data.generated_at || '未知'}`;
+
+        const enrichedRoots = await Promise.all(
+          roots.map(async (root) => {
+            const [rootDaily, rootRecentHours] = await Promise.all([
+              fetchRecentDailyDetail(root.service.id, rangeStartDate, rangeEndDate),
+              fetchRecentHours(root.service.id, 3),
+            ]);
+            const children = await Promise.all(
+              (root.children || []).map(async (child) => {
+                const childRecentHours = await fetchRecentHours(child.service.id, 3);
+                return { ...child, _recentHours: childRecentHours };
+              })
+            );
+            return { ...root, _daily: rootDaily, _recentHours: rootRecentHours, children };
+          })
+        );
+
+        renderSummary(enrichedRoots);
+        renderRoots(enrichedRoots);
+        scrollTimelinesToLatest();
+      }
+
+      loadStatus();
+      refreshRangeText();
+      initRangePicker();
+      bindTimelineTooltip();
+      setInterval(loadStatus, 20000);
+    </script>
+{% endblock %}

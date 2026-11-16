@@ -1,21 +1,53 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>{{ service.name }} - {{ year }} failure calendar</title>
+{% extends "layout.html" %}
+
+{% block title %}{{ service.name }} - {{ year }} failure calendar{% endblock %}
+
+{% block page_styles %}
   <style>
-    body { font-family: Arial, sans-serif; margin: 24px; }
-    table.year { border-collapse: collapse; }
-    td, th { border: 1px solid #d6d6d6; padding: 4px; text-align: center; }
-    .unhealthy { background-color: #ff7f7f; }
+    .calendar-title {
+      margin: 0 0 8px;
+      font-size: 1.5rem;
+    }
+
+    .calendar-hint {
+      margin: 0 0 18px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .month-title {
+      margin: 18px 0 8px;
+      font-size: 1.06rem;
+    }
+
+    .calendar-table {
+      border-collapse: collapse;
+      width: 100%;
+      max-width: 760px;
+      background: rgba(255, 255, 255, 0.78);
+    }
+
+    .calendar-table td,
+    .calendar-table th {
+      border: 1px solid #d6d6d6;
+      padding: 4px;
+      text-align: center;
+      min-width: 40px;
+      height: 30px;
+    }
+
+    .calendar-table .unhealthy {
+      background-color: #ff7f7f;
+    }
   </style>
-</head>
-<body>
-  <h1>{{ service.name }} - {{ year }} failure calendar</h1>
-  <p>Red day = unhealthy. Click a day to view failure logs.</p>
+{% endblock %}
+
+{% block content %}
+  <h1 class="calendar-title">{{ service.name }} - {{ year }} failure calendar</h1>
+  <p class="calendar-hint">Red day = unhealthy. Click a day to view failure logs.</p>
   {% for month in range(1, 13) %}
-    <h2>{{ year }}-{{ "%02d"|format(month) }}</h2>
-    <table>
+    <h2 class="month-title">{{ year }}-{{ "%02d"|format(month) }}</h2>
+    <table class="calendar-table">
       <tr>
         <th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th>
       </tr>
@@ -35,5 +67,4 @@
       {% endfor %}
     </table>
   {% endfor %}
-</body>
-</html>
+{% endblock %}
