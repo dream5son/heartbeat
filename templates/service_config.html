@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <title>服务检测配置</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 24px; color: #1f2937; }
+      h1 { margin-bottom: 16px; }
+      .layout { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 24px; }
+      .panel { border: 1px solid #dfe7f1; border-radius: 10px; padding: 16px; background: #f9fbff; }
+      form { display: grid; gap: 12px; }
+      label { display: grid; gap: 6px; font-weight: 600; }
+      input, select, button { padding: 8px 10px; font-size: 14px; border-radius: 6px; border: 1px solid #cdd7e3; }
+      button { background: #2563eb; color: #fff; border: none; cursor: pointer; }
+      button.secondary { background: #0f766e; }
+      table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+      th, td { border-bottom: 1px solid #e2e8f0; padding: 8px 10px; text-align: left; }
+      .endpoint-row { display: grid; grid-template-columns: 1.5fr 1fr; gap: 8px; }
+      .muted { color: #64748b; }
+      .small { font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <h1>服务检测配置</h1>
+    <div class="layout">
+      <div class="panel">
+        <h2>新增服务</h2>
+        <form id="service-form">
+          <label>
+            服务名
+            <input name="name" placeholder="例如 gateway" required>
+          </label>
+
+          <label>
+            子服务
+            <select name="parent_id">
+              <option value="">无（根服务）</option>
+            </select>
+          </label>
+
+          <div>
+            <div class="muted small">检测配置</div>
+            <div id="endpoint-list"></div>
+          </div>
+
+          <button type="button" class="secondary" id="add-endpoint">添加检测 URL</button>
+          <button type="submit">保存</button>
+        </form>
+      </div>
+
+      <div class="panel">
+        <h2>服务列表</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>服务名</th>
+              <th>子服务</th>
+              <th>检测规则</th>
+            </tr>
+          </thead>
+          <tbody id="service-list"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <script>
+      const endpointList = document.getElementById('endpoint-list');
+      const serviceList = document.getElementById('service-list');
+
+      function createEndpointRow(url = '', rule = 'status==200') {
+        const row = document.createElement('div');
+        row.className = 'endpoint-row';
+        row.innerHTML = `
+          <input type="url" name="heartbeat_url" value="${url}" placeholder="https://example.com/health" required>
+          <select name="success_rule">
+            <option value="status==200" ${rule === 'status==200' ? 'selected' : ''}>status==200</option>
+            <option value="body_contains:OK" ${rule === 'body_contains:OK' ? 'selected' : ''}>body_contains:OK</option>
+            <option value="body_contains:ok" ${rule === 'body_contains:ok' ? 'selected' : ''}>body_contains:ok</option>
+          </select>
+        `;
+        return row;
+      }
+
+      function addEndpoint(url = '', rule = 'status==200') {
+        endpointList.appendChild(createEndpointRow(url, rule));
+      }
+
+      document.getElementById('add-endpoint').addEventListener('click', () => addEndpoint());
+      addEndpoint();
+
+      async function loadServices() {
+        const res = await fetch('/api/services');
+        const data = await res.json();
+        const services = data.services || [];
+        const parentSelector = document.querySelector('select[name="parent_id"]');
+        parentSelector.innerHTML = '<option value="">无（根服务）</option>';
+        services.forEach((service) => {
+          const option = document.createElement('option');
+          option.value = service.id;
+          option.textContent = service.name;
+          parentSelector.appendChild(option);
+        });
+
+        serviceList.innerHTML = '';
+        services.forEach((service) => {
+          const row = document.createElement('tr');
+          const parentName = service.parent_id ? services.find((item) => item.id === service.parent_id)?.name || '—' : '—';
+          const rules = (service.heartbeat_configs || []).map((item) => `${item.heartbeat_url} => ${item.success_rule}`).join('<br>') || '未配置';
+          row.innerHTML = `<td>${service.name}</td><td>${parentName}</td><td>${rules}</td>`;
+          serviceList.appendChild(row);
+        });
+      }
+
+      document.getElementById('service-form').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const rows = [...endpointList.querySelectorAll('.endpoint-row')];
+        const heartbeat_configs = rows
+          .map((row) => {
+            const url = row.querySelector('input[name="heartbeat_url"]').value.trim();
+            const rule = row.querySelector('select[name="success_rule"]').value;
+            return url ? { heartbeat_url: url, success_rule: rule } : null;
+          })
+          .filter(Boolean);
+
+        const payload = {
+          name: form.elements.name.value.trim(),
+          parent_id: form.elements.parent_id.value ? Number(form.elements.parent_id.value) : null,
+          enabled: true,
+          heartbeat_configs,
+        };
+
+        const response = await fetch('/api/services', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+          const err = await response.text();
+          alert('保存失败: ' + err);
+          return;
+        }
+        form.reset();
+        endpointList.innerHTML = '';
+        addEndpoint();
+        await loadServices();
+      });
+
+      loadServices();
+    </script>
+  </body>
+</html>

@@ -27,6 +27,7 @@ from sqlalchemy.orm import declarative_base, relationship, scoped_session, sessi
 DATABASE_URL = os.getenv("HEARTBEAT_DB", "sqlite:///heartbeat.db")
 
 Base = declarative_base()
+DEFAULT_SUCCESS_RULE = "status==200"
 
 
 class Service(Base):
@@ -51,6 +52,7 @@ class ServiceEndpoint(Base):
     id = Column(Integer, primary_key=True)
     service_id = Column(Integer, ForeignKey("services.id"), nullable=False, index=True)
     heartbeat_url = Column(String(2048), nullable=False)
+    success_rule = Column(String(512), nullable=False, default=DEFAULT_SUCCESS_RULE)
 
     service = relationship("Service", back_populates="endpoints")
 
@@ -104,6 +106,23 @@ engine = create_engine(
 SessionLocal = scoped_session(sessionmaker(bind=engine, autoflush=False, autocommit=False))
 
 
+def ensure_schema() -> None:
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+    with engine.begin() as conn:
+        tables = conn.exec_driver_sql(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='service_endpoints'"
+        ).fetchall()
+        if not tables:
+            return
+        columns = conn.exec_driver_sql("PRAGMA table_info(service_endpoints)").fetchall()
+        if any(column[1] == "success_rule" for column in columns):
+            return
+        conn.exec_driver_sql(
+            "ALTER TABLE service_endpoints ADD COLUMN success_rule VARCHAR(512) DEFAULT 'status==200' NOT NULL"
+        )
+
+
 def minute_column(check_time: dt.datetime) -> str:
     return f"minute_{(check_time.hour * 60 + check_time.minute):04d}"
 
@@ -112,18 +131,71 @@ def day_column(check_date: dt.date) -> str:
     return f"day_{check_date.month:02d}{check_date.day:02d}"
 
 
-def check_url(heartbeat_url: str, timeout: int = 8) -> tuple[bool, int, str]:
+def normalize_success_rule(success_rule: Any) -> str:
+    if success_rule is None:
+        return DEFAULT_SUCCESS_RULE
+    normalized = str(success_rule).strip()
+    return normalized or DEFAULT_SUCCESS_RULE
+
+
+def endpoint_check_passed(
+    success_rule: str,
+    request_ok: bool,
+    status_code: int,
+    response_body: str,
+) -> bool:
+    rule = normalize_success_rule(success_rule)
+    if not request_ok:
+        return False
+    if rule.startswith("status=="):
+        expected_text = rule.split("==", 1)[1].strip()
+        try:
+            expected_status = int(expected_text)
+        except ValueError:
+            return False
+        return status_code == expected_status
+    if rule.startswith("body_contains:"):
+        expected_text = rule.split(":", 1)[1]
+        return expected_text in response_body
+    return False
+
+
+def check_url(heartbeat_url: str, timeout: int = 8) -> tuple[bool, int, str, str]:
     try:
         with urllib.request.urlopen(heartbeat_url, timeout=timeout) as resp:
             status = getattr(resp, "status", 200)
-            return status == 200, int(status), f"status={status}"
+            body = resp.read(64 * 1024).decode("utf-8", errors="replace")
+            return True, int(status), f"status={status}", body
     except urllib.error.HTTPError as err:
-        return False, int(err.code), str(err)
+        body = err.read(64 * 1024).decode("utf-8", errors="replace")
+        return False, int(err.code), str(err), body
     except Exception as err:  # noqa: BLE001
-        return False, -1, str(err)
+        return False, -1, str(err), ""
 
 
-def _get_or_create_daily(session: Any, service_id: int, check_date: dt.date) -> DailyCheck:
+def parse_heartbeat_configs(payload: dict[str, Any]) -> list[tuple[str, str]]:
+    if "heartbeat_configs" in payload:
+        configs = payload["heartbeat_configs"]
+        if not isinstance(configs, list):
+            abort(400, description="heartbeat_configs must be a list")
+        normalized_configs: list[tuple[str, str]] = []
+        for item in configs:
+            if not isinstance(item, dict):
+                abort(400, description="heartbeat_configs entries must be objects")
+            heartbeat_url = str(item.get("heartbeat_url") or "").strip()
+            if not heartbeat_url:
+                continue
+            success_rule = normalize_success_rule(item.get("success_rule"))
+            normalized_configs.append((heartbeat_url, success_rule))
+        return normalized_configs
+
+    heartbeat_urls = payload.get("heartbeat_urls") or []
+    if not isinstance(heartbeat_urls, list):
+        abort(400, description="heartbeat_urls must be a list")
+    return [(str(url), DEFAULT_SUCCESS_RULE) for url in heartbeat_urls if url]
+
+
+def _get_or_create_daily(session: Any, service_id: int, check_date: dt.date) -> "DailyCheck":
     daily = (
         session.query(DailyCheck)
         .filter(DailyCheck.service_id == service_id, DailyCheck.date == check_date)
@@ -135,7 +207,7 @@ def _get_or_create_daily(session: Any, service_id: int, check_date: dt.date) -> 
     return daily
 
 
-def _get_or_create_yearly(session: Any, service_id: int, year: int) -> YearlyCheck:
+def _get_or_create_yearly(session: Any, service_id: int, year: int) -> "YearlyCheck":
     yearly = (
         session.query(YearlyCheck)
         .filter(YearlyCheck.service_id == service_id, YearlyCheck.year == year)
@@ -156,16 +228,46 @@ def perform_service_check(
     minute_col = minute_column(check_time)
     day_col = day_column(check_time.date())
 
-    endpoint_results: list[tuple[bool, int, str, str]] = []
+    endpoint_results: list[tuple[bool, int, str, str, str]] = []
     for endpoint in service.endpoints:
-        ok, status_code, detail = checker(endpoint.heartbeat_url)
-        endpoint_results.append((ok, status_code, detail, endpoint.heartbeat_url))
+        result = checker(endpoint.heartbeat_url)
+        if len(result) == 3:
+            ok, status_code, detail = result
+            endpoint_ok = bool(ok)
+            endpoint_results.append(
+                (
+                    endpoint_ok,
+                    int(status_code),
+                    str(detail),
+                    endpoint.heartbeat_url,
+                    normalize_success_rule(endpoint.success_rule),
+                )
+            )
+            continue
+
+        request_ok, status_code, detail, response_body = result
+        success_rule = normalize_success_rule(endpoint.success_rule)
+        endpoint_ok = endpoint_check_passed(
+            success_rule=success_rule,
+            request_ok=bool(request_ok),
+            status_code=int(status_code),
+            response_body=str(response_body),
+        )
+        endpoint_results.append(
+            (
+                endpoint_ok,
+                int(status_code),
+                str(detail),
+                endpoint.heartbeat_url,
+                success_rule,
+            )
+        )
 
     if endpoint_results:
         service_ok = all(item[0] for item in endpoint_results)
     else:
         service_ok = False
-        endpoint_results.append((False, -1, "no heartbeat urls configured", ""))
+        endpoint_results.append((False, -1, "no heartbeat urls configured", "", DEFAULT_SUCCESS_RULE))
 
     daily = _get_or_create_daily(session, service.id, check_time.date())
     setattr(daily, minute_col, 1 if service_ok else 0)
@@ -178,7 +280,7 @@ def perform_service_check(
         setattr(yearly, day_col, 0)
 
     if not service_ok:
-        for ok, status_code, detail, heartbeat_url in endpoint_results:
+        for ok, status_code, detail, heartbeat_url, success_rule in endpoint_results:
             if ok:
                 continue
             session.add(
@@ -186,7 +288,7 @@ def perform_service_check(
                     service_id=service.id,
                     check_time=check_time,
                     status=status_code,
-                    log=f"url={heartbeat_url or '-'} detail={detail}",
+                    log=f"url={heartbeat_url or '-'} rule={success_rule} detail={detail}",
                 )
             )
 
@@ -229,6 +331,14 @@ def service_to_dict(service: Service) -> dict[str, Any]:
         "name": service.name,
         "parent_id": service.parent_id,
         "enabled": service.enabled,
+        "heartbeat_configs": [
+            {
+                "id": endpoint.id,
+                "heartbeat_url": endpoint.heartbeat_url,
+                "success_rule": normalize_success_rule(endpoint.success_rule),
+            }
+            for endpoint in service.endpoints
+        ],
         "heartbeat_urls": [e.heartbeat_url for e in service.endpoints],
         "child_service_ids": [child.id for child in service.children],
     }
@@ -243,12 +353,7 @@ def create_app() -> Flask:
 
     @app.get("/")
     def index() -> Any:
-        session = SessionLocal()
-        try:
-            services = session.query(Service).all()
-            return jsonify({"services": [service_to_dict(s) for s in services]})
-        finally:
-            session.close()
+        return render_template("service_config.html")
 
     @app.get("/api/services")
     def list_services() -> Any:
@@ -266,18 +371,20 @@ def create_app() -> Flask:
         if not name:
             abort(400, description="name is required")
 
-        heartbeat_urls = payload.get("heartbeat_urls") or []
-        if not isinstance(heartbeat_urls, list):
-            abort(400, description="heartbeat_urls must be a list")
+        heartbeat_configs = parse_heartbeat_configs(payload)
 
         service = Service(
             name=name,
             parent_id=payload.get("parent_id"),
             enabled=bool(payload.get("enabled", True)),
         )
-        for heartbeat_url in heartbeat_urls:
-            if heartbeat_url:
-                service.endpoints.append(ServiceEndpoint(heartbeat_url=str(heartbeat_url)))
+        for heartbeat_url, success_rule in heartbeat_configs:
+            service.endpoints.append(
+                ServiceEndpoint(
+                    heartbeat_url=heartbeat_url,
+                    success_rule=success_rule,
+                )
+            )
 
         session = SessionLocal()
         try:
@@ -303,14 +410,16 @@ def create_app() -> Flask:
                 service.parent_id = payload["parent_id"]
             if "enabled" in payload:
                 service.enabled = bool(payload["enabled"])
-            if "heartbeat_urls" in payload:
-                heartbeat_urls = payload["heartbeat_urls"]
-                if not isinstance(heartbeat_urls, list):
-                    abort(400, description="heartbeat_urls must be a list")
+            if "heartbeat_urls" in payload or "heartbeat_configs" in payload:
+                heartbeat_configs = parse_heartbeat_configs(payload)
                 service.endpoints.clear()
-                for heartbeat_url in heartbeat_urls:
-                    if heartbeat_url:
-                        service.endpoints.append(ServiceEndpoint(heartbeat_url=str(heartbeat_url)))
+                for heartbeat_url, success_rule in heartbeat_configs:
+                    service.endpoints.append(
+                        ServiceEndpoint(
+                            heartbeat_url=heartbeat_url,
+                            success_rule=success_rule,
+                        )
+                    )
 
             session.commit()
             session.refresh(service)
@@ -532,6 +641,7 @@ def start_scheduler() -> None:
     thread.start()
 
 
+ensure_schema()
 Base.metadata.create_all(bind=engine)
 app = create_app()
 
